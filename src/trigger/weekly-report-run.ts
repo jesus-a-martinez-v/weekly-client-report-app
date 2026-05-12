@@ -6,7 +6,7 @@ import { reportingWindow } from "@/lib/window";
 import { sendDigestMessage } from "@/lib/telegram";
 import { generateClientReport } from "./generate-client-report";
 
-const SYSTEM_ACTOR = "system@trigger.dev";
+const SYSTEM_ACTOR = "system";
 
 export const weeklyReportRun = schedules.task({
   id: "weekly-report-run",

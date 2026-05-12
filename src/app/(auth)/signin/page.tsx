@@ -8,7 +8,7 @@ export default function SignInPage() {
       <div className="w-full max-w-sm">
         <div className="mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-            Example Company
+            {process.env.APP_DISPLAY_NAME || "Weekly Client Reports"}
           </p>
           <h1 className="mt-2 text-3xl font-medium tracking-tight">
             Weekly client reports

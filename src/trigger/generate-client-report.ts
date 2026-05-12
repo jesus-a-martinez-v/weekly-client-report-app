@@ -22,7 +22,7 @@ import {
   type ReportingWindow,
 } from "@/lib/window";
 
-const SYSTEM_ACTOR = "system@trigger.dev";
+const SYSTEM_ACTOR = "system";
 
 export type GenerateClientReportPayload = {
   clientId: string;

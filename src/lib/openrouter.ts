@@ -8,8 +8,14 @@ let _promptCache: string | null = null;
 
 async function loadNarrativePrompt(): Promise<string> {
   if (_promptCache) return _promptCache;
-  const p = path.join(process.cwd(), "src/prompts/narrative.md");
-  _promptCache = await fs.readFile(p, "utf-8");
+  if (process.env.NARRATIVE_PROMPT) {
+    _promptCache = process.env.NARRATIVE_PROMPT;
+    return _promptCache;
+  }
+  const promptPath =
+    process.env.NARRATIVE_PROMPT_PATH ??
+    path.join(process.cwd(), "src/prompts/narrative.example.md");
+  _promptCache = await fs.readFile(promptPath, "utf-8");
   return _promptCache;
 }
 
@@ -21,6 +27,13 @@ function apiKey(): string {
   const k = process.env.OPENROUTER_API_KEY;
   if (!k) throw new Error("OPENROUTER_API_KEY is not set");
   return k;
+}
+
+function appBaseUrl(): string {
+  const url = process.env.APP_BASE_URL;
+  if (url) return url.replace(/\/$/, "");
+  if (process.env.NODE_ENV !== "production") return "http://localhost:3000";
+  throw new Error("APP_BASE_URL is required outside local development");
 }
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -39,7 +52,7 @@ async function chat(req: ChatRequest): Promise<string> {
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${apiKey()}`,
-      "HTTP-Referer": process.env.APP_BASE_URL || "https://reports.example-company.net",
+      "HTTP-Referer": appBaseUrl(),
       "X-Title": "weekly-client-report-app",
     },
     body: JSON.stringify(req),
@@ -97,7 +110,7 @@ const EMAIL_SYSTEM_PROMPT = `You write the email body that accompanies a weekly 
 
 Output JSON with two fields:
 - "subject": exactly "[<CLIENT_NAME>] Weekly update, week of <DATE_RANGE>"
-- "body": plain-text email body — greeting line ("Hi <CONTACT_NAME>,"), 1–2 short paragraphs summarizing the week in non-technical language drawn from the narrative, then a blank line, then "Best,", then a blank line, then "Admin"
+- "body": plain-text email body — greeting line ("Hi <CONTACT_NAME>,"), 1–2 short paragraphs summarizing the week in non-technical language drawn from the narrative, then a blank line, then "Best,", then a blank line, then "<REPORT_SENDER_NAME>"
 
 Rules:
 - No em dashes (—) anywhere. Use commas, periods, colons, or rephrase.
@@ -110,6 +123,7 @@ Quiet weeks: if the narrative says it was a lighter week, mirror that honestly i
 
 export async function generateEmailDraft(input: EmailDraftInput): Promise<EmailDraft> {
   const userPrompt =
+    `REPORT_SENDER_NAME: ${process.env.REPORT_SENDER_NAME || "Team"}\n` +
     `CLIENT_NAME: ${input.clientName}\n` +
     `CONTACT_NAME: ${input.contactName}\n` +
     `DATE_RANGE: ${input.dateRange}\n\n` +

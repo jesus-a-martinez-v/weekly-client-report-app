@@ -1,5 +1,5 @@
 /**
- * Seed clients/projects from the legacy Python project's clients.yaml.
+ * Seed clients/projects from a private YAML file.
  * Idempotent by slug: clients are upserted; status is preserved across reseeds.
  *
  * NOTE Phase 2 will reference projects.id from reports rows; at that point
@@ -13,8 +13,7 @@ import { parse as parseYaml } from "yaml";
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
 
-const YAML_PATH =
-  "/path/to/private-source/clients.yaml";
+const YAML_PATH = process.env.SEED_CLIENTS_PATH;
 
 type YamlProject = {
   name?: string | null;
@@ -34,6 +33,10 @@ async function main() {
   const { eq, sql } = await import("drizzle-orm");
   const { db } = await import("../src/db");
   const { auditLog, clients, projects } = await import("../src/db/schema");
+
+  if (!YAML_PATH) {
+    throw new Error("SEED_CLIENTS_PATH is required to run db:seed");
+  }
 
   const raw = readFileSync(YAML_PATH, "utf8");
   const data = parseYaml(raw) as YamlFile;

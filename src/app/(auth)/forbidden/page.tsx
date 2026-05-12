@@ -12,7 +12,7 @@ export default function ForbiddenPage() {
         </h1>
         <p className="mt-4 text-sm text-zinc-600">
           Sign-in is restricted to a single email. If you think this is wrong,
-          poke Admin.
+          contact the project operator.
         </p>
         <Link
           href="/signin"

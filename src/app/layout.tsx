@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Weekly Client Reports",
-  description: "Example Company weekly client reporting admin",
+  description: "Weekly client reporting admin",
 };
 
 export default function RootLayout({

@@ -20,7 +20,7 @@ export default async function DashboardLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b hairline px-8">
           <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-            Example Company · Admin
+            {process.env.APP_DISPLAY_NAME || "Weekly Client Reports"} · Admin
           </div>
           <div className="flex items-center gap-4 text-sm text-zinc-600">
             <span className="font-mono">{session.user.email}</span>

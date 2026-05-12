@@ -12,6 +12,13 @@ function chatId(): string {
   return c;
 }
 
+function appBaseUrl(): string {
+  const url = process.env.APP_BASE_URL;
+  if (url) return url.replace(/\/$/, "");
+  if (process.env.NODE_ENV !== "production") return "http://localhost:3000";
+  throw new Error("APP_BASE_URL is required outside local development");
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -28,8 +35,7 @@ export type SendDigestInput = {
 };
 
 export async function sendDigestMessage(input: SendDigestInput): Promise<void> {
-  const base = process.env.APP_BASE_URL || "https://reports.example-company.net";
-  const reviewUrl = `${base}/reports?week=${encodeURIComponent(input.weekLabel)}`;
+  const reviewUrl = `${appBaseUrl()}/reports?week=${encodeURIComponent(input.weekLabel)}`;
   const total = input.summary.drafted + input.summary.quiet + input.summary.errors;
 
   const lines = [

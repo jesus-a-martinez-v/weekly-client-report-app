@@ -31,9 +31,6 @@ export function renderReportHtml(input: PdfTemplateInput): string {
 <head>
 <meta charset="utf-8" />
 <title>${client} — Weekly report (${label})</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   @page { size: Letter; margin: 1in; }
   :root {
@@ -44,7 +41,7 @@ export function renderReportHtml(input: PdfTemplateInput): string {
   }
   html, body { padding: 0; margin: 0; }
   body {
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     color: var(--ink);
     font-size: 11pt;
     line-height: 1.55;
@@ -112,14 +109,14 @@ export function renderReportHtml(input: PdfTemplateInput): string {
 </head>
 <body>
   <header>
-    <div class="brand">Example Company · Weekly Report</div>
+    <div class="brand">Weekly Client Reports</div>
     <div class="week">${label}</div>
   </header>
   <h1 class="client">${client}</h1>
   <div class="subtitle">Week of ${range}</div>
   <main>${body}</main>
   <footer>
-    <span>Prepared by Example Company</span>
+    <span>Prepared by ${escapeHtml(process.env.REPORT_SENDER_NAME || "Team")}</span>
     <span>${range}</span>
   </footer>
 </body>
