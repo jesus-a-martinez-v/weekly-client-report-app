@@ -208,11 +208,16 @@ Screens to design:
 
 **Phase 1 — Scaffold + DB + Auth + Client CRUD (1–2 days) — ✅ DONE (2026-05-12)**
 - ✅ Next.js 15.5.18 scaffold (TS, App Router, Tailwind), Drizzle schema with all 6 tables, first migration applied.
-- ✅ Postgres 16 brought up on the VM as `weekly-reports-db` service, exposed via direct `5432:5432` host port mapping (not reverse proxy — Postgres `TLS negotiation` byte sequence breaks reverse proxy's SNI parser). TLS terminated in Postgres with a self-signed cert at `/path/to/private-certs/`. Verified externally with `psql 'sslmode=require'`; `sslmode=disable` is rejected by `pg_hba.conf`.
-- ✅ Auth.js v5 (`next-auth@5.0.0-beta.31`) GitHub OAuth + `ADMIN_EMAIL` allow-list + middleware that redirects unauthenticated traffic to `/signin` and routes denied logins to `/forbidden`. **Operator action required**: create the GitHub OAuth app (dev callback `http://localhost:3000/api/auth/callback/github`) and fill `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` in `.env.local` before end-to-end signin verification.
+- ✅ Postgres 16 brought up on the VM as `weekly-reports-db` service, exposed via direct `5432:5432` host port mapping (not reverse proxy — Postgres `TLS negotiation` byte sequence breaks reverse proxy's SNI parser). TLS terminated in Postgres with a self-signed cert at `/path/to/private-certs/`. Verified locally with `psql 'sslmode=require'`; `sslmode=disable` is rejected by `pg_hba.conf`.
+- ✅ Auth.js v5 (`next-auth@5.0.0-beta.31`) GitHub OAuth + `ADMIN_EMAIL` allow-list + middleware that redirects unauthenticated traffic to `/signin` and routes denied logins to `/forbidden`.
 - ✅ Clients/projects CRUD: list, new, edit pages; server actions for create/update/toggle/delete (hard delete behind type-the-slug dialog); every mutation writes an `audit_log` row.
 - ✅ `scripts/seed.ts` reads `/path/to/private-source/clients.yaml`, upserts by slug, runs idempotently (4 clients / 5 projects after two consecutive runs, status preserved across reseeds).
 - Deviation from original plan: TLS cert is self-signed (documented Phase 4 swap to LE via DNS-01 if `verify-full` is ever needed); Postgres exposed via direct host port mapping, not reverse proxy.
+
+**Pending operator action (Admin, end of phase):**
+- ⏳ Create GitHub OAuth app — dev callback `http://localhost:3000/api/auth/callback/github`. Fill `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` in `.env.local`. Required for end-to-end signin verification.
+- ⏳ Add DNS A record `db.example.com → <server address>` (TTL 300). Required for external DB reachability from Trigger.dev / Vercel in Phase 2+. Phase 1 local dev uses `127.0.0.1:5432` and doesn't need this.
+- ⏳ End-to-end signin verification once the two items above land: confirm `admin@example-company.net` lands on `/admin/clients`; a non-allowed GitHub email lands on `/forbidden`.
 
 **Phase 2 — Trigger.dev pipeline end-to-end (2–3 days)**
 - `trigger.config.ts` with `puppeteer()` extension, `maxDuration: 600`.
