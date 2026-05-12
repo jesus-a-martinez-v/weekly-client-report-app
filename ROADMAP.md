@@ -69,7 +69,9 @@ await schedules.del(id);
 await schedules.list();
 ```
 
-**Source of truth = Trigger.dev.** Our `schedules` table mirrors the last-known state for fast UI rendering. Every mutation goes through the SDK first, then upserts the mirror. A `/api/schedules/sync` route forces a reconcile if drift is suspected.
+Edits are **in-place** — `schedules.update` mutates the existing schedule (stable id, history preserved). `del()` is only for permanently removing a schedule, *not* for changing its time. The `/admin/schedule` UI's "edit time" / "pause" / "resume" actions map to `update` / `deactivate` / `activate`; "delete" is intentionally not exposed.
+
+**Source of truth = Trigger.dev.** Our `schedules` table mirrors the last-known state for fast UI rendering. Every mutation goes through the SDK first, then upserts the mirror. A `/api/admin/schedules/sync` route forces a reconcile if drift is suspected.
 
 ---
 
@@ -80,7 +82,7 @@ await schedules.list();
 - **`clients`** — id, name, slug (unique), contact_name, contact_email, tone, status (`active` | `disabled`), created_at, updated_at.
 - **`projects`** — id, client_id (fk cascade), name (nullable; null = single-project client), repos (`text[]` of `owner/repo`), position, created_at.
 - **`runs`** — id, kind (`weekly` | `on_demand`), week_label (`2026-W19`), window_start, window_end, status (`queued|running|succeeded|partial|failed`), trigger_run_id, schedule_id (nullable fk), error_message, started_at, finished_at, created_at.
-- **`reports`** — id, run_id (fk), client_id (fk), week_label, window_start, window_end, status (`pending|fetching|narrating|rendering|drafted|sent|discarded|quiet|failed`), totals_prs / issues / commits, activity_json (jsonb), narrative_md (text), email_subject, email_body, pdf_blob_url, pdf_filename, gmail_draft_id, sent_at, discarded_at, trigger_run_id, error_message, created_at, updated_at. Unique on `(client_id, week_label)`.
+- **`reports`** — id, run_id (fk), client_id (fk, **nullable**, `ON DELETE SET NULL`), client_name (snapshot, preserves attribution if the client is hard-deleted later), week_label, window_start, window_end, status (`pending|fetching|narrating|rendering|drafted|sent|discarded|quiet|failed`), totals_prs / issues / commits, activity_json (jsonb), narrative_md (text), email_subject, email_body, pdf_blob_url, pdf_filename, gmail_draft_id, sent_at, discarded_at, trigger_run_id, error_message, created_at, updated_at. Unique on `(client_id, week_label)` as a partial index `WHERE client_id IS NOT NULL`.
 - **`schedules`** — id, trigger_schedule_id (unique), kind (`weekly_main` | `weekly_reminder`), external_id, cron, timezone, active, next_run, last_synced_at, created_at, updated_at.
 - **`audit_log`** — id, actor_email, action, entity_type, entity_id, payload (jsonb), created_at.
 
@@ -110,22 +112,28 @@ On-demand runs from the webapp call `tasks.trigger<typeof generateClientReport>(
 (auth)/signin                       single GitHub button
 (dashboard)/                        layout requires session
   page                              home: last weeks' reports, next scheduled run, quick actions
-  clients/                          list + active toggle
-    new                             create
-    [id]                            edit (inline project + repo CRUD)
   reports/                          list grouped by week
     [id]                            split pane: narrative + editable email | PDF iframe, Send/Discard/Regenerate
   runs/                             list of recent runs
     [id]                            realtime per-client progress (useRealtimeRun)
-  schedule/                         two cards: Monday + Wednesday; cron + tz + pause; cronstrue preview
   on-demand/                        client picker + week picker + Trigger button
+  admin/                            settings surface (rarely-touched config), separate sub-nav
+    layout                          sidebar tabs: Clients · Schedule
+    clients/                        list + active toggle + delete
+      new                           create
+      [id]                          edit (inline project + repo CRUD)
+    schedule/                       two cards: Monday + Wednesday; cron + tz + pause; cronstrue preview
 api/
   auth/[...nextauth]/route          Auth.js
-  schedules/sync/route              manual SDK→DB reconcile (admin)
+  admin/schedules/sync/route        manual SDK→DB reconcile (admin)
   webhooks/n8n/route                optional async callback
 ```
 
 Server actions in `src/server/actions/`: `clients.ts`, `reports.ts`, `schedules.ts`, `runs.ts`.
+
+**Client delete semantics** — two distinct paths in `clients.ts`:
+- **Toggle off** (`toggleClientStatus(id)`) — flips `active ↔ disabled`. Default "stop processing this client" UX. `weeklyReportRun` filters on `status='active'`, so disabled clients keep their row and all historical reports but are skipped on weekly runs. Reversible with one click.
+- **Hard delete** (`deleteClient(id)`) — gated behind a type-the-slug confirm dialog. Cascades to `projects`; report history is preserved via the snapshot `client_name` column on `reports` (the FK becomes `NULL`, the report still renders as "(deleted) Acme Corp"). Reserve for fully retiring a client. Surface in the admin UI as a separate, less prominent destructive action below the toggle.
 
 Auth.js v5 in `src/lib/auth.ts` — GitHub provider, `signIn` callback checks `ALLOWED.has(profile.email)`, JWT session, middleware redirects anonymous to `/signin`.
 
