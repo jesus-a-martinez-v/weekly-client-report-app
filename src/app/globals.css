@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #fafaf9;
+  color: #18181b;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.hairline {
+  border-color: rgba(0, 0, 0, 0.08);
+}
