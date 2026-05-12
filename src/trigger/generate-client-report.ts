@@ -302,6 +302,17 @@ export const generateClientReport = task({
           updatedAt: sql`now()`,
         })
         .where(eq(reports.id, reportId));
+      await db.insert(auditLog).values({
+        actorEmail: SYSTEM_ACTOR,
+        action: "report.failed",
+        entityType: "report",
+        entityId: reportId,
+        payload: {
+          clientSlug: client.slug,
+          weekLabel: window.weekLabel,
+          error: message.slice(0, 500),
+        },
+      });
       if (ownsRun) {
         await db
           .update(runs)

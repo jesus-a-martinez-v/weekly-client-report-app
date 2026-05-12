@@ -7,9 +7,7 @@ lets the operator review the result in the app.
 
 ## Status
 
-- Phase 1 is complete: scaffold, database schema, authentication, and client CRUD.
-- Phase 2 is in progress: background jobs, activity fetching, narrative generation,
-  PDF rendering, email draft creation, and run digests.
+- Phases 1–4 are complete.
 - The public repository must not contain private prompts, production URLs, private
   client names, personal emails, local absolute paths, infrastructure topology, or
   real credentials.
@@ -54,7 +52,12 @@ npm run db:seed
 ## Implementation Notes
 
 - Schedules are managed imperatively through the Trigger.dev SDK and mirrored in
-  the database for fast UI rendering.
+  the database for fast UI rendering. The schedule editor lives at `/admin/schedules`.
+  If you rename a task ID in code, delete and recreate any imperative schedule that
+  targets it — the app won't automatically re-point it.
+- The drafted-report reminder fires on its own schedule (see `/admin/schedules`).
+  The threshold before a nudge is sent is controlled by `REMINDER_THRESHOLD_HOURS`
+  (default 18 hours).
 - The app is intentionally single-operator. Avoid adding tenant, invite, or role
   systems unless the product direction changes.
 - Email actions go through the webhook integration; the webapp should not manage

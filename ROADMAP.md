@@ -91,7 +91,7 @@ In progress.
 
 ### Phase 3 - Reports UI and Actions
 
-Planned.
+Complete.
 
 - Report list and report detail views.
 - Editable email subject/body.
@@ -101,7 +101,7 @@ Planned.
 
 ### Phase 4 - Schedule UI and Final Polish
 
-Planned.
+Complete.
 
 - Schedule editor backed by imperative SDK calls.
 - Reminder task and schedule.

@@ -1,13 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
 
 import { db } from "@/db";
-import { clients, reports } from "@/db/schema";
+import { auditLog, clients, reports } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
+import { AuditTimeline } from "./audit-timeline";
 import { sendReport, discardReport } from "@/server/actions/reports";
 import { formatRange } from "@/lib/window";
 
@@ -52,6 +53,20 @@ export default async function ReportDetailPage({
     .where(eq(reports.id, id));
 
   if (!row) notFound();
+
+  const auditRows = await db
+    .select({
+      id: auditLog.id,
+      actorEmail: auditLog.actorEmail,
+      action: auditLog.action,
+      payload: auditLog.payload,
+      createdAt: auditLog.createdAt,
+    })
+    .from(auditLog)
+    .where(
+      and(eq(auditLog.entityType, "report"), eq(auditLog.entityId, id)),
+    )
+    .orderBy(desc(auditLog.createdAt));
 
   const isInflight = IN_FLIGHT.has(row.status);
   const isActionable = ACTIONABLE.has(row.status);
@@ -213,6 +228,18 @@ export default async function ReportDetailPage({
           </Link>
         </p>
       )}
+
+      <section className="mt-10">
+        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-3">
+          Activity
+        </p>
+        <AuditTimeline
+          rows={auditRows.map((r) => ({
+            ...r,
+            payload: (r.payload ?? {}) as Record<string, unknown>,
+          }))}
+        />
+      </section>
     </div>
   );
 }

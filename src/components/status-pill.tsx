@@ -14,6 +14,8 @@ const styles: Record<string, string> = {
   sent: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   discarded: "bg-zinc-100 text-zinc-400 ring-zinc-200",
   failed: "bg-rose-50 text-rose-700 ring-rose-200",
+  // schedule statuses
+  inactive: "bg-zinc-100 text-zinc-500 ring-zinc-200",
   // run statuses
   queued: "bg-zinc-50 text-zinc-500 ring-zinc-200",
   running: "bg-amber-50 text-amber-700 ring-amber-200",

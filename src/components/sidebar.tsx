@@ -21,7 +21,7 @@ const sections = [
     href: "/admin",
     items: [
       { label: "Clients", href: "/admin/clients", disabled: false },
-      { label: "Schedule", href: "/admin/schedule", disabled: true },
+      { label: "Schedules", href: "/admin/schedules", disabled: false },
     ],
   },
 ];
