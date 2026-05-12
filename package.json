@@ -17,7 +17,11 @@
   },
   "dependencies": {
     "@auth/core": "0.37.4",
+    "@octokit/rest": "^22.0.1",
+    "@trigger.dev/sdk": "^4.4.6",
+    "@vercel/blob": "^2.3.3",
     "drizzle-orm": "^0.45.2",
+    "marked": "^18.0.3",
     "next": "^15.5.18",
     "next-auth": "^5.0.0-beta.31",
     "postgres": "3.4.5",
@@ -27,6 +31,7 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@trigger.dev/build": "^4.4.6",
     "@types/node": "20.17.6",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
@@ -36,6 +41,7 @@
     "eslint": "8.57.1",
     "eslint-config-next": "^15.5.18",
     "postcss": "8.4.49",
+    "puppeteer": "^24.43.1",
     "tailwindcss": "3.4.14",
     "tsx": "4.19.2",
     "typescript": "5.6.3"
