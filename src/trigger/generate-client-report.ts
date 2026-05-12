@@ -88,6 +88,7 @@ export const generateClientReport = task({
       ? isoWeekToWindow(payload.weekLabel)
       : reportingWindow();
 
+    const ownsRun = !payload.runId;
     const runId = await ensureRun(payload, window, ctx.run.id);
     const dateRange = formatRange(window.start, window.end);
     const startDateISO = bogotaDateISO(window.start);
@@ -272,6 +273,13 @@ export const generateClientReport = task({
         });
       });
 
+      if (ownsRun) {
+        await db
+          .update(runs)
+          .set({ status: "succeeded", finishedAt: sql`now()` })
+          .where(eq(runs.id, runId));
+      }
+
       logger.info("Report drafted", {
         clientSlug: client.slug,
         weekLabel: window.weekLabel,
@@ -294,6 +302,16 @@ export const generateClientReport = task({
           updatedAt: sql`now()`,
         })
         .where(eq(reports.id, reportId));
+      if (ownsRun) {
+        await db
+          .update(runs)
+          .set({
+            status: "failed",
+            finishedAt: sql`now()`,
+            errorMessage: message.slice(0, 2000),
+          })
+          .where(eq(runs.id, runId));
+      }
       logger.error("Report failed", { clientSlug: client.slug, error: message });
       throw err;
     }

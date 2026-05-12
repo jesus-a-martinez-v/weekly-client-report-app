@@ -4,17 +4,17 @@ const sections = [
   {
     label: "Reports",
     href: "/reports",
-    items: [{ label: "All reports", href: "/reports", disabled: true }],
+    items: [{ label: "All reports", href: "/reports", disabled: false }],
   },
   {
     label: "Runs",
     href: "/runs",
-    items: [{ label: "All runs", href: "/runs", disabled: true }],
+    items: [{ label: "All runs", href: "/runs", disabled: false }],
   },
   {
     label: "On-demand",
     href: "/on-demand",
-    items: [{ label: "Trigger now", href: "/on-demand", disabled: true }],
+    items: [{ label: "Trigger now", href: "/on-demand", disabled: false }],
   },
   {
     label: "Admin",
