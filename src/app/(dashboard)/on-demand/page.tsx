@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { db } from "@/db";
 import { clients } from "@/db/schema";
-import { reportingWindow } from "@/lib/window";
+import { reportingWindow } from "@/lib/shared/window";
 import { triggerOnDemandReport } from "@/server/actions/reports";
 
 export const dynamic = "force-dynamic";

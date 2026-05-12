@@ -10,7 +10,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
 import { AuditTimeline } from "./audit-timeline";
 import { sendReport, discardReport } from "@/server/actions/reports";
-import { formatRange } from "@/lib/window";
+import { formatRange } from "@/lib/shared/window";
 
 export const dynamic = "force-dynamic";
 

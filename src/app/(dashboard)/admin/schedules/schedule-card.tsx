@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { StatusPill } from "@/components/status-pill";
 import { upsertSchedule, deleteSchedule } from "@/server/actions/schedules";
-import { CURATED_TIMEZONES, type ScheduleKind } from "@/lib/schedules";
+import { CURATED_TIMEZONES, type ScheduleKind } from "@/lib/shared/schedules";
 import type { ScheduleRow } from "@/server/actions/schedules";
 
 function formatNextRun(date: Date | null, timezone: string): string {

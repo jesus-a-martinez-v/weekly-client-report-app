@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { parseClientForm, type ProjectInput } from "@/lib/validation/client";
+import { parseClientForm, type ProjectInput } from "@/lib/shared/validation/client";
 
 import { db } from "@/db";
 import { auditLog, clients, projects } from "@/db/schema";

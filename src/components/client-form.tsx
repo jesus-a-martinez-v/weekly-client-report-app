@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 
-import { clientFormSchema } from "@/lib/validation/client";
+import { clientFormSchema } from "@/lib/shared/validation/client";
 
 type ProjectInput = {
   id?: string;

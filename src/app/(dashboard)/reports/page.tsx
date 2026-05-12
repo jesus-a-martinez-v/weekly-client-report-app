@@ -4,7 +4,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { clients, reports } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
-import { formatRange } from "@/lib/window";
+import { formatRange } from "@/lib/shared/window";
 
 export const dynamic = "force-dynamic";
 

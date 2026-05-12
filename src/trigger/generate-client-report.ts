@@ -9,7 +9,7 @@ import {
   generateNarrative,
   quietWeekNarrative,
 } from "@/lib/openrouter";
-import { renderReportHtml } from "@/lib/pdf-template";
+import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/pdf";
 import { uploadReportPdf } from "@/lib/blob";
 import { postN8n } from "@/lib/n8n";
@@ -20,7 +20,7 @@ import {
   reportFilename,
   reportingWindow,
   type ReportingWindow,
-} from "@/lib/window";
+} from "@/lib/shared/window";
 
 const SYSTEM_ACTOR = "system";
 

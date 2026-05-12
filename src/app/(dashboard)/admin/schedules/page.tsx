@@ -1,4 +1,4 @@
-import { SCHEDULE_DEFS, SCHEDULE_KINDS } from "@/lib/schedules";
+import { SCHEDULE_DEFS, SCHEDULE_KINDS } from "@/lib/shared/schedules";
 import {
   loadScheduleRows,
   loadUnmanagedSchedules,

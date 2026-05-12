@@ -1,4 +1,4 @@
-import { formatAuditAction, summarizeAuditPayload, auditCategory } from "@/lib/audit";
+import { formatAuditAction, summarizeAuditPayload, auditCategory } from "@/lib/shared/audit";
 
 type AuditRow = {
   id: string;

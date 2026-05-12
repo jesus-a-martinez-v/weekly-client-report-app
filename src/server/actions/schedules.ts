@@ -11,8 +11,8 @@ import {
   SCHEDULE_DEFS,
   SCHEDULE_KINDS,
   type ScheduleKind,
-} from "@/lib/schedules";
-import { parseScheduleForm } from "@/lib/validation/schedule";
+} from "@/lib/shared/schedules";
+import { parseScheduleForm } from "@/lib/shared/validation/schedule";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();

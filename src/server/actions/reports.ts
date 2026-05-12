@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { postN8n } from "@/lib/n8n";
-import { reportingWindow } from "@/lib/window";
-import { parseEmailEditForm, parseOnDemandForm } from "@/lib/validation/report";
+import { reportingWindow } from "@/lib/shared/window";
+import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
 import { generateClientReport } from "@/trigger/generate-client-report";
 
 import { db } from "@/db";

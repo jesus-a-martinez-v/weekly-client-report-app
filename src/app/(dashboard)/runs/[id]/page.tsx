@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { reports, runs } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { formatRange } from "@/lib/window";
+import { formatRange } from "@/lib/shared/window";
 
 export const dynamic = "force-dynamic";
 

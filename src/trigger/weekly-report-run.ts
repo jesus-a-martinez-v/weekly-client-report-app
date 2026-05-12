@@ -2,7 +2,7 @@ import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLog, clients, runs } from "@/db/schema";
-import { reportingWindow } from "@/lib/window";
+import { reportingWindow } from "@/lib/shared/window";
 import { sendDigestMessage } from "@/lib/telegram";
 import { generateClientReport } from "./generate-client-report";
 
