@@ -22,6 +22,7 @@
     "@trigger.dev/react-hooks": "^4.4.6",
     "@trigger.dev/sdk": "^4.4.6",
     "@vercel/blob": "^2.3.3",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "marked": "^18.0.3",
     "next": "^15.5.18",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@trigger.dev/build": "^4.4.6",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "20.17.6",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",

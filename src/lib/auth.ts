@@ -1,29 +1,40 @@
 import NextAuth from "next-auth";
-import GitHub from "next-auth/providers/github";
-
-const allowedEmails = new Set(
-  (process.env.ADMIN_EMAIL ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
-);
+import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [GitHub],
+  providers: [
+    Credentials({
+      credentials: {
+        email: {},
+        password: {},
+      },
+      async authorize(credentials) {
+        const email = (credentials?.email as string | undefined)?.toLowerCase().trim();
+        const password = credentials?.password as string | undefined;
+
+        const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+        const hash = process.env.ADMIN_PASSWORD_HASH;
+
+        if (!email || !password || !adminEmail || !hash) return null;
+        if (email !== adminEmail) return null;
+
+        const ok = await bcrypt.compare(password, hash);
+        if (!ok) return null;
+
+        return { id: adminEmail, email: adminEmail };
+      },
+    }),
+  ],
   session: { strategy: "jwt" },
   pages: {
     signIn: "/signin",
     error: "/forbidden",
   },
   callbacks: {
-    signIn({ profile }) {
-      const email = profile?.email?.toLowerCase();
-      if (!email) return false;
-      return allowedEmails.has(email);
-    },
-    jwt({ token, profile }) {
-      if (profile?.email) {
-        token.email = profile.email;
+    jwt({ token, user }) {
+      if (user?.email) {
+        token.email = user.email;
       }
       return token;
     },
