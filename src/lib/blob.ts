@@ -11,8 +11,8 @@ export type UploadPdfInput = {
 export type UploadedBlob = { url: string; pathname: string };
 
 export async function uploadReportPdf(input: UploadPdfInput): Promise<UploadedBlob> {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) throw new Error("BLOB_READ_WRITE_TOKEN is not set");
+  const token = process.env.WEEKLY_CLIENT_REPORTS_BLOB_READ_WRITE_TOKEN;
+  if (!token) throw new Error("WEEKLY_CLIENT_REPORTS_BLOB_READ_WRITE_TOKEN is not set");
 
   const pathname = `reports/${input.weekLabel}/${input.slug}_${input.startDateISO}_report.pdf`;
   const res = await put(pathname, input.body, {
