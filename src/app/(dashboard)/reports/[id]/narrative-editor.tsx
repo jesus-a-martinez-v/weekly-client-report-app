@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { marked } from "marked";
 import { updateReportNarrative, rewriteReportNarrative } from "@/server/actions/reports";
 
@@ -13,6 +13,10 @@ export function NarrativeEditor({
 }) {
   const [value, setValue] = useState(initialNarrative);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    setValue(initialNarrative);
+  }, [initialNarrative]);
   const [aiPending, setAiPending] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
