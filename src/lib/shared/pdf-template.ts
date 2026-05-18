@@ -109,7 +109,7 @@ export function renderReportHtml(input: PdfTemplateInput): string {
 </head>
 <body>
   <header>
-    <div class="brand">Weekly Client Reports</div>
+    <div class="brand">${escapeHtml(process.env.REPORT_SENDER_NAME || "")}</div>
     <div class="week">${label}</div>
   </header>
   <h1 class="client">${client}</h1>
