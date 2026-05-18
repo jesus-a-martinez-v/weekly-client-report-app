@@ -88,7 +88,7 @@ export const generateClientReport = task({
       ? isoWeekToWindow(payload.weekLabel)
       : reportingWindow();
 
-    const ownsRun = !payload.runId;
+    const ownsRun = !payload.runId || !!payload.onDemand;
     const runId = await ensureRun(payload, window, ctx.run.id);
     const dateRange = formatRange(window.start, window.end);
     const startDateISO = bogotaDateISO(window.start);
