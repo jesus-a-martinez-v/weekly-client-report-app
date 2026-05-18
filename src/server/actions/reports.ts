@@ -63,6 +63,52 @@ export async function sendReport(reportId: string) {
   revalidatePath(`/runs/${row.runId}`);
 }
 
+export async function deleteReport(reportId: string) {
+  const email = await actorEmail();
+
+  const [row] = await db
+    .select({
+      id: reports.id,
+      runId: reports.runId,
+      clientName: reports.clientName,
+      weekLabel: reports.weekLabel,
+      status: reports.status,
+      gmailDraftId: reports.gmailDraftId,
+    })
+    .from(reports)
+    .where(eq(reports.id, reportId));
+
+  if (!row) throw new Error("Report not found");
+
+  if (ACTIONABLE_STATUSES.has(row.status) && row.gmailDraftId) {
+    try {
+      await postN8n({ action: "discard", draft_id: row.gmailDraftId });
+    } catch {
+      // best-effort: still delete the row even if the draft can't be reached
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(reports).where(eq(reports.id, reportId));
+    await tx.insert(auditLog).values({
+      actorEmail: email,
+      action: "report.delete",
+      entityType: "report",
+      entityId: null,
+      payload: {
+        reportId,
+        runId: row.runId,
+        clientName: row.clientName,
+        weekLabel: row.weekLabel,
+        priorStatus: row.status,
+      },
+    });
+  });
+
+  revalidatePath("/reports");
+  revalidatePath(`/runs/${row.runId}`);
+}
+
 export async function discardReport(reportId: string) {
   const email = await actorEmail();
 

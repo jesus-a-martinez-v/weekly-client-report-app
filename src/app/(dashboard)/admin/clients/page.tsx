@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { clients, projects } from "@/db/schema";
 
 import { StatusPill } from "@/components/status-pill";
+import { DeleteClientDialog } from "@/components/delete-client-dialog";
 import { ToggleStatusForm } from "./toggle-status-form";
 
 export const dynamic = "force-dynamic";
@@ -105,6 +106,16 @@ export default async function ClientsListPage() {
                         >
                           Edit
                         </Link>
+                        <DeleteClientDialog
+                          clientId={c.id}
+                          clientName={c.name}
+                          clientSlug={c.slug}
+                          trigger={
+                            <span className="text-xs text-zinc-400 hover:text-rose-600">
+                              Delete
+                            </span>
+                          }
+                        />
                       </div>
                     </td>
                   </tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { deleteClient } from "@/server/actions/clients";
 
@@ -8,10 +8,12 @@ export function DeleteClientDialog({
   clientId,
   clientName,
   clientSlug,
+  trigger,
 }: {
   clientId: string;
   clientName: string;
   clientSlug: string;
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -41,9 +43,13 @@ export function DeleteClientDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
+        className={
+          trigger
+            ? "cursor-pointer"
+            : "rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
+        }
       >
-        Delete permanently…
+        {trigger ?? "Delete permanently…"}
       </button>
 
       {open && (

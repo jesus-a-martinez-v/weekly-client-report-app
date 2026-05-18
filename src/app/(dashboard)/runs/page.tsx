@@ -1,12 +1,25 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { db } from "@/db";
 import { reports, runs } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
+import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
+import { deleteRun } from "@/server/actions/runs";
 
 export const dynamic = "force-dynamic";
+
+function formatClients(names: string[]): { display: string; title?: string } {
+  if (names.length === 0) return { display: "—" };
+  if (names.length <= 3)
+    return { display: names.join(", "), title: names.join(", ") };
+  const shown = names.slice(0, 2).join(", ");
+  return {
+    display: `${shown} +${names.length - 2} more`,
+    title: names.join(", "),
+  };
+}
 
 export default async function RunsPage() {
   const allRuns = await db
@@ -34,11 +47,26 @@ export default async function RunsPage() {
     .from(reports)
     .groupBy(reports.runId, reports.status);
 
+  const clientRows = await db
+    .select({
+      runId: reports.runId,
+      clientName: reports.clientName,
+    })
+    .from(reports)
+    .orderBy(asc(reports.clientName));
+
   const tallyMap = new Map<string, Record<string, number>>();
   for (const t of tallies) {
     const existing = tallyMap.get(t.runId) ?? {};
     existing[t.status] = t.count;
     tallyMap.set(t.runId, existing);
+  }
+
+  const clientsByRun = new Map<string, string[]>();
+  for (const c of clientRows) {
+    const existing = clientsByRun.get(c.runId) ?? [];
+    existing.push(c.clientName);
+    clientsByRun.set(c.runId, existing);
   }
 
   return (
@@ -64,12 +92,14 @@ export default async function RunsPage() {
             <thead>
               <tr className="border-b hairline text-xs uppercase tracking-[0.12em] text-zinc-500">
                 <th className="px-5 py-3 text-left font-medium">Week</th>
+                <th className="px-5 py-3 text-left font-medium">Clients</th>
                 <th className="px-5 py-3 text-left font-medium">Kind</th>
                 <th className="px-5 py-3 text-left font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Drafted</th>
                 <th className="px-5 py-3 text-right font-medium">Sent</th>
                 <th className="px-5 py-3 text-right font-medium">Errors</th>
                 <th className="px-5 py-3 text-right font-medium">Started</th>
+                <th className="px-5 py-3 text-right font-medium" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -78,6 +108,12 @@ export default async function RunsPage() {
                 const drafted = (t.drafted ?? 0) + (t.quiet ?? 0);
                 const sent = t.sent ?? 0;
                 const errors = t.failed ?? 0;
+                const clients = clientsByRun.get(r.id) ?? [];
+                const clientsCell = formatClients(clients);
+                const confirmMessage =
+                  clients.length > 0
+                    ? `Delete the ${r.kind} run for ${r.weekLabel} (${clients.length} report${clients.length === 1 ? "" : "s"}: ${clients.join(", ")})? This permanently removes the run and all of its reports.`
+                    : `Delete the ${r.kind} run for ${r.weekLabel}? This permanently removes the run.`;
                 return (
                   <tr key={r.id} className="border-b hairline last:border-b-0">
                     <td className="px-5 py-3">
@@ -92,6 +128,12 @@ export default async function RunsPage() {
                           ? formatRange(r.windowStart, r.windowEnd)
                           : ""}
                       </p>
+                    </td>
+                    <td
+                      className="px-5 py-3 text-zinc-700"
+                      title={clientsCell.title}
+                    >
+                      {clientsCell.display}
                     </td>
                     <td className="px-5 py-3 text-zinc-500">{r.kind}</td>
                     <td className="px-5 py-3">
@@ -111,6 +153,12 @@ export default async function RunsPage() {
                             minute: "2-digit",
                           })
                         : "–"}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <DeleteRowButton
+                        action={deleteRun.bind(null, r.id)}
+                        confirmMessage={confirmMessage}
+                      />
                     </td>
                   </tr>
                 );

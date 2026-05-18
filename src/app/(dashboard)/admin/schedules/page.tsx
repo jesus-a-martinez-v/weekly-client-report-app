@@ -4,6 +4,7 @@ import {
   loadUnmanagedSchedules,
   deleteUnmanagedSchedule,
 } from "@/server/actions/schedules";
+import { DeleteRowButton } from "@/components/delete-row-button";
 import { ScheduleCard } from "./schedule-card";
 
 export const dynamic = "force-dynamic";
@@ -59,19 +60,13 @@ export default async function SchedulesPage() {
                     {s.timezone} · {s.taskId}
                   </span>
                 </div>
-                <form
+                <DeleteRowButton
                   action={deleteUnmanagedSchedule.bind(
                     null,
                     s.triggerScheduleId,
                   )}
-                >
-                  <button
-                    type="submit"
-                    className="text-xs text-zinc-400 hover:text-rose-600"
-                  >
-                    Delete
-                  </button>
-                </form>
+                  confirmMessage={`Delete this unmanaged Trigger.dev schedule (${s.cron} · ${s.taskId})?`}
+                />
               </div>
             ))}
           </div>

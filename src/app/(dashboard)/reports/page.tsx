@@ -4,7 +4,9 @@ import Link from "next/link";
 import { db } from "@/db";
 import { clients, reports } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
+import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
+import { deleteReport } from "@/server/actions/reports";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +141,7 @@ export default async function ReportsPage({
                 <th className="px-5 py-3 text-right font-medium">Issues</th>
                 <th className="px-5 py-3 text-right font-medium">Commits</th>
                 <th className="px-5 py-3 text-right font-medium">Created</th>
+                <th className="px-5 py-3 text-right font-medium" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -171,6 +174,12 @@ export default async function ReportsPage({
                       month: "short",
                       day: "numeric",
                     })}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <DeleteRowButton
+                      action={deleteReport.bind(null, r.id)}
+                      confirmMessage={`Delete the report for ${r.clientName} (${r.weekLabel})? Any live email draft will be discarded.`}
+                    />
                   </td>
                 </tr>
               ))}
