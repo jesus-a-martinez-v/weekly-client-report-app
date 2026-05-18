@@ -155,6 +155,34 @@ export async function generateEmailDraft(input: EmailDraftInput): Promise<EmailD
   return { subject: obj.subject, body: obj.body };
 }
 
+export type ReviseNarrativeInput = {
+  clientName: string;
+  currentNarrative: string;
+  instructions: string;
+};
+
+export async function reviseNarrative(input: ReviseNarrativeInput): Promise<string> {
+  const systemPrompt =
+    "You are editing a client-facing weekly status report narrative written in Markdown. " +
+    "Apply the requested changes precisely. Return only the revised Markdown — no commentary, no code fences.";
+
+  const userPrompt =
+    `CLIENT: ${input.clientName}\n\n` +
+    `CURRENT NARRATIVE:\n${input.currentNarrative}\n\n` +
+    `INSTRUCTIONS:\n${input.instructions}`;
+
+  const result = await chat({
+    model: model(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "text" },
+  });
+
+  return result.trim();
+}
+
 export function quietWeekNarrative(input: {
   clientName: string;
   contactName: string;

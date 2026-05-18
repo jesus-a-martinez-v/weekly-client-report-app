@@ -8,6 +8,7 @@ import { auditLog, clients, reports } from "@/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
+import { NarrativeEditor } from "./narrative-editor";
 import { AuditTimeline } from "./audit-timeline";
 import { sendReport, discardReport } from "@/server/actions/reports";
 import { formatRange } from "@/lib/shared/window";
@@ -76,9 +77,10 @@ export default async function ReportDetailPage({
       ? formatRange(row.windowStart, row.windowEnd)
       : row.weekLabel;
 
-  const narrativeHtml = row.narrativeMd
-    ? await marked.parse(row.narrativeMd)
-    : null;
+  const narrativeHtml =
+    row.narrativeMd && !isActionable
+      ? await marked.parse(row.narrativeMd)
+      : null;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -136,15 +138,19 @@ export default async function ReportDetailPage({
         </div>
       )}
 
-      {narrativeHtml && (
+      {row.narrativeMd && (
         <section className="mt-10">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-3">
             Narrative
           </p>
-          <div
-            className="prose prose-sm max-w-none rounded-md border hairline bg-white px-6 py-5"
-            dangerouslySetInnerHTML={{ __html: narrativeHtml }}
-          />
+          {isActionable ? (
+            <NarrativeEditor reportId={id} initialNarrative={row.narrativeMd} />
+          ) : (
+            <div
+              className="prose prose-sm max-w-none rounded-md border hairline bg-white px-6 py-5"
+              dangerouslySetInnerHTML={{ __html: narrativeHtml! }}
+            />
+          )}
         </section>
       )}
 

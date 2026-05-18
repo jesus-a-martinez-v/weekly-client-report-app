@@ -8,7 +8,9 @@ import { auth } from "@/lib/auth";
 import { postN8n } from "@/lib/n8n";
 import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
+import { reviseNarrative } from "@/lib/openrouter";
 import { generateClientReport } from "@/trigger/generate-client-report";
+import { regenerateReportPdf } from "@/trigger/regenerate-report-pdf";
 
 import { db } from "@/db";
 import { auditLog, clients, reports, runs } from "@/db/schema";
@@ -169,6 +171,80 @@ export async function updateReportEmail(reportId: string, formData: FormData) {
     });
   });
 
+  revalidatePath(`/reports/${reportId}`);
+}
+
+export async function updateReportNarrative(reportId: string, formData: FormData) {
+  const email = await actorEmail();
+  const narrativeMd = formData.get("narrativeMd") as string;
+  if (!narrativeMd?.trim()) throw new Error("Narrative cannot be empty");
+
+  const [row] = await db
+    .select({ status: reports.status })
+    .from(reports)
+    .where(eq(reports.id, reportId));
+
+  if (!row) throw new Error("Report not found");
+  if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reports)
+      .set({ narrativeMd, updatedAt: sql`now()` })
+      .where(eq(reports.id, reportId));
+    await tx.insert(auditLog).values({
+      actorEmail: email,
+      action: "report.narrative_edited",
+      entityType: "report",
+      entityId: reportId,
+      payload: { charCount: narrativeMd.length },
+    });
+  });
+
+  await regenerateReportPdf.trigger({ reportId });
+
+  revalidatePath(`/reports/${reportId}`);
+}
+
+export async function rewriteReportNarrative(reportId: string, formData: FormData) {
+  const email = await actorEmail();
+  const instructions = (formData.get("instructions") as string)?.trim();
+  if (!instructions) throw new Error("Instructions cannot be empty");
+
+  const [row] = await db
+    .select({
+      status: reports.status,
+      narrativeMd: reports.narrativeMd,
+      clientName: reports.clientName,
+    })
+    .from(reports)
+    .where(eq(reports.id, reportId));
+
+  if (!row) throw new Error("Report not found");
+  if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
+  if (!row.narrativeMd) throw new Error("No narrative to revise");
+
+  const revised = await reviseNarrative({
+    clientName: row.clientName,
+    currentNarrative: row.narrativeMd,
+    instructions,
+  });
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reports)
+      .set({ narrativeMd: revised, updatedAt: sql`now()` })
+      .where(eq(reports.id, reportId));
+    await tx.insert(auditLog).values({
+      actorEmail: email,
+      action: "report.narrative_ai_revised",
+      entityType: "report",
+      entityId: reportId,
+      payload: { instructions: instructions.slice(0, 500) },
+    });
+  });
+
+  await regenerateReportPdf.trigger({ reportId });
   revalidatePath(`/reports/${reportId}`);
 }
 
