@@ -6,12 +6,12 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { postN8n } from "@/lib/n8n";
-import { reportingWindow } from "@/lib/shared/window";
+import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
 import { generateClientReport } from "@/trigger/generate-client-report";
 
 import { db } from "@/db";
-import { auditLog, clients, reports } from "@/db/schema";
+import { auditLog, clients, reports, runs } from "@/db/schema";
 
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -176,20 +176,41 @@ export async function triggerOnDemandReport(formData: FormData) {
   const input = parseOnDemandForm(formData);
   const email = await actorEmail();
 
-  await generateClientReport.trigger({
+  const window = input.weekLabel
+    ? isoWeekToWindow(input.weekLabel)
+    : reportingWindow();
+
+  const [runRow] = await db
+    .insert(runs)
+    .values({
+      kind: "on_demand",
+      weekLabel: window.weekLabel,
+      windowStart: window.start,
+      windowEnd: window.end,
+      status: "running",
+      startedAt: sql`now()`,
+    })
+    .returning({ id: runs.id });
+
+  const handle = await generateClientReport.trigger({
     clientId: input.clientId,
-    weekLabel: input.weekLabel,
+    weekLabel: window.weekLabel,
+    runId: runRow.id,
     onDemand: true,
   });
+
+  await db
+    .update(runs)
+    .set({ triggerRunId: handle.id })
+    .where(eq(runs.id, runRow.id));
 
   await db.insert(auditLog).values({
     actorEmail: email,
     action: "report.on_demand_triggered",
     entityType: "client",
     entityId: input.clientId,
-    payload: { clientId: input.clientId, weekLabel: input.weekLabel ?? null },
+    payload: { clientId: input.clientId, weekLabel: window.weekLabel, runId: runRow.id },
   });
 
-  const weekParam = input.weekLabel ?? reportingWindow().weekLabel;
-  redirect(`/reports?clientId=${input.clientId}&weekLabel=${weekParam}`);
+  redirect(`/runs/${runRow.id}`);
 }
