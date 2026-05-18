@@ -49,6 +49,19 @@ npm run db:migrate
 npm run db:seed
 ```
 
+## Trigger.dev Deploy
+
+Any change to files under `src/trigger/` must be deployed to Trigger.dev or the
+new/changed task will not run in production. Deploy with env vars sourced from
+`.env.local`:
+
+```bash
+set -a && source .env.local && set +a && npx trigger.dev@latest deploy
+```
+
+Always deploy immediately after committing Trigger.dev task changes — do not
+leave it for later.
+
 ## Implementation Notes
 
 - Schedules are managed imperatively through the Trigger.dev SDK and mirrored in
