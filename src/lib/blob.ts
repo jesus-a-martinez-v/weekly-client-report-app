@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 
 export type UploadPdfInput = {
   weekLabel: string;
@@ -23,4 +23,16 @@ export async function uploadReportPdf(input: UploadPdfInput): Promise<UploadedBl
     allowOverwrite: true,
   });
   return { url: res.url, pathname: res.pathname };
+}
+
+export async function deleteReportPdfs(
+  urls: Array<string | null | undefined>,
+): Promise<void> {
+  const token = process.env.WEEKLY_CLIENT_REPORTS_BLOB_READ_WRITE_TOKEN;
+  if (!token) throw new Error("WEEKLY_CLIENT_REPORTS_BLOB_READ_WRITE_TOKEN is not set");
+
+  const clean = urls.filter((u): u is string => Boolean(u));
+  if (clean.length === 0) return;
+
+  await del(clean, { token });
 }

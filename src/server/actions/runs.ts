@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
+import { deleteReportPdfs } from "@/lib/blob";
 import { postN8n } from "@/lib/n8n";
 import { db } from "@/db";
 import { auditLog, reports, runs } from "@/db/schema";
@@ -28,6 +29,7 @@ export async function deleteRun(runId: string) {
       id: reports.id,
       status: reports.status,
       gmailDraftId: reports.gmailDraftId,
+      pdfBlobUrl: reports.pdfBlobUrl,
     })
     .from(reports)
     .where(eq(reports.runId, runId));
@@ -40,6 +42,12 @@ export async function deleteRun(runId: string) {
         // best-effort: continue even if the draft can't be reached
       }
     }
+  }
+
+  try {
+    await deleteReportPdfs(children.map((r) => r.pdfBlobUrl));
+  } catch {
+    // best-effort: still delete the run even if blob cleanup fails
   }
 
   await db.transaction(async (tx) => {

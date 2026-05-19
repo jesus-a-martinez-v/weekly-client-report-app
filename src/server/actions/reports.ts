@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { deleteReportPdfs } from "@/lib/blob";
 import { postN8n } from "@/lib/n8n";
 import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
@@ -124,6 +125,7 @@ export async function deleteReport(reportId: string) {
       weekLabel: reports.weekLabel,
       status: reports.status,
       gmailDraftId: reports.gmailDraftId,
+      pdfBlobUrl: reports.pdfBlobUrl,
     })
     .from(reports)
     .where(eq(reports.id, reportId));
@@ -136,6 +138,12 @@ export async function deleteReport(reportId: string) {
     } catch {
       // best-effort: still delete the row even if the draft can't be reached
     }
+  }
+
+  try {
+    await deleteReportPdfs([row.pdfBlobUrl]);
+  } catch {
+    // best-effort: still delete the row even if the blob can't be reached
   }
 
   await db.transaction(async (tx) => {
