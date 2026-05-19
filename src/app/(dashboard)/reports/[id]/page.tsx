@@ -10,7 +10,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
 import { NarrativeEditor } from "./narrative-editor";
 import { AuditTimeline } from "./audit-timeline";
-import { sendReport, discardReport } from "@/server/actions/reports";
+import { sendReport, markReportSent, discardReport } from "@/server/actions/reports";
 import { formatRange } from "@/lib/shared/window";
 
 export const dynamic = "force-dynamic";
@@ -193,6 +193,15 @@ export default async function ReportDetailPage({
               className="rounded-md border border-emerald-700 bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
             >
               Send
+            </button>
+          </form>
+          <form action={markReportSent.bind(null, id)}>
+            <button
+              type="submit"
+              className="rounded-md border hairline bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              title="Use when you sent this report from a different email account"
+            >
+              Mark as sent
             </button>
           </form>
           <form action={discardReport.bind(null, id)}>

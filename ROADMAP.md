@@ -53,6 +53,7 @@ All sensitive and deployment-specific values come from environment variables:
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL`
 - `NARRATIVE_PROMPT`
+- `NARRATIVE_PROMPT_BASE64`
 - `NARRATIVE_PROMPT_PATH`
 - `REPORT_SENDER_NAME`
 - `N8N_WEBHOOK_URL`

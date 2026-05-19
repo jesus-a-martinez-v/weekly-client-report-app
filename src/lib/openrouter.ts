@@ -12,8 +12,27 @@ async function loadNarrativePrompt(): Promise<string> {
     _promptCache = process.env.NARRATIVE_PROMPT;
     return _promptCache;
   }
+  if (process.env.NARRATIVE_PROMPT_BASE64) {
+    _promptCache = Buffer.from(
+      process.env.NARRATIVE_PROMPT_BASE64,
+      "base64",
+    ).toString("utf8");
+    return _promptCache;
+  }
+  if (process.env.NARRATIVE_PROMPT_PATH) {
+    _promptCache = await fs.readFile(process.env.NARRATIVE_PROMPT_PATH, "utf-8");
+    return _promptCache;
+  }
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL ||
+    process.env.TRIGGER_SECRET_KEY
+  ) {
+    throw new Error(
+      "NARRATIVE_PROMPT or NARRATIVE_PROMPT_BASE64 is required in deployed environments",
+    );
+  }
   const promptPath =
-    process.env.NARRATIVE_PROMPT_PATH ??
     path.join(process.cwd(), "src/prompts/narrative.example.md");
   _promptCache = await fs.readFile(promptPath, "utf-8");
   return _promptCache;
@@ -113,6 +132,7 @@ Output JSON with two fields:
 - "body": plain-text email body — greeting line ("Hi <CONTACT_NAME>,"), 1–2 short paragraphs summarizing the week in non-technical language drawn from the narrative, then a blank line, then "Best,", then a blank line, then "<REPORT_SENDER_NAME>"
 
 Rules:
+- Write in the first person singular ("I", "me"). Never use "we", "us", "our", or "the team".
 - No em dashes (—) anywhere. Use commas, periods, colons, or rephrase.
 - Plain text, not Markdown.
 - No PR numbers, commit hashes, or GitHub URLs.
@@ -192,7 +212,7 @@ export function quietWeekNarrative(input: {
   return [
     `# Highlights`,
     ``,
-    `It was a lighter week on ${input.clientName}. The team didn't merge anything user-facing during the week of ${input.dateRange}, and used the time to plan and prepare upcoming work.`,
+    `It was a lighter week on ${input.clientName}. I didn't ship anything user-facing during the week of ${input.dateRange}, and used the time to plan and prepare upcoming work.`,
     ``,
     `# Coming up next`,
     ``,

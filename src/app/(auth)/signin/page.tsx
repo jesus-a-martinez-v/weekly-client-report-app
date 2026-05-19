@@ -18,13 +18,17 @@ export default function SignInPage() {
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
-    const result = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
-
-    if (result?.ok) {
-      router.push("/admin/clients");
-    } else {
+    try {
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result && !result.error && result.ok !== false) {
+        router.push("/admin/clients");
+        return;
+      }
       setError("Invalid email or password.");
+    } catch {
+      setError("Invalid email or password.");
+    } finally {
+      setLoading(false);
     }
   }
 

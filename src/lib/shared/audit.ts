@@ -3,6 +3,7 @@ const ACTION_LABELS: Record<string, string> = {
   "report.quiet": "Quiet (no activity)",
   "report.edited": "Email edited",
   "report.sent": "Sent",
+  "report.marked_sent": "Marked as sent",
   "report.discarded": "Discarded",
   "report.failed": "Failed",
   "report.reminded": "Reminded",
@@ -39,6 +40,8 @@ export function summarizeAuditPayload(
     case "report.sent":
     case "report.discarded":
       return "";
+    case "report.marked_sent":
+      return "sent from another account";
     case "report.failed": {
       const err = typeof payload.error === "string" ? payload.error : "";
       return err.slice(0, 120);

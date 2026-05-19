@@ -63,6 +63,56 @@ export async function sendReport(reportId: string) {
   revalidatePath(`/runs/${row.runId}`);
 }
 
+export async function markReportSent(reportId: string) {
+  const email = await actorEmail();
+
+  const [row] = await db
+    .select({
+      id: reports.id,
+      runId: reports.runId,
+      gmailDraftId: reports.gmailDraftId,
+      status: reports.status,
+    })
+    .from(reports)
+    .where(eq(reports.id, reportId));
+
+  if (!row) throw new Error("Report not found");
+  if (!ACTIONABLE_STATUSES.has(row.status))
+    throw new Error(`Cannot mark a report with status "${row.status}" as sent`);
+
+  if (row.gmailDraftId) {
+    try {
+      await postN8n({ action: "discard", draft_id: row.gmailDraftId });
+    } catch {
+      // best-effort: the report was sent through another channel; don't block
+      // the DB transition if the upstream draft can't be reached.
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reports)
+      .set({
+        status: "sent",
+        sentAt: sql`now()`,
+        gmailDraftId: null,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(reports.id, reportId));
+    await tx.insert(auditLog).values({
+      actorEmail: email,
+      action: "report.marked_sent",
+      entityType: "report",
+      entityId: reportId,
+      payload: { draftId: row.gmailDraftId, manual: true },
+    });
+  });
+
+  revalidatePath("/reports");
+  revalidatePath(`/reports/${reportId}`);
+  revalidatePath(`/runs/${row.runId}`);
+}
+
 export async function deleteReport(reportId: string) {
   const email = await actorEmail();
 

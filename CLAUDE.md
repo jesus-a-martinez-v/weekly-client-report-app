@@ -32,7 +32,9 @@ lets the operator review the result in the app.
 - Keep `.env.example` placeholder-only. Never include real domains, webhook paths,
   emails, tokens, project refs, chat IDs, or database hostnames.
 - Keep the production narrative prompt out of git. Store it locally via
-  `NARRATIVE_PROMPT_PATH` or in the environment via `NARRATIVE_PROMPT`.
+  `NARRATIVE_PROMPT_PATH`, or in hosted environments via `NARRATIVE_PROMPT`
+  or `NARRATIVE_PROMPT_BASE64`. Hosted jobs must not fall back to the public
+  example prompt.
 - Keep seed data private. Point `SEED_CLIENTS_PATH` at a local YAML file.
 - Use generic examples in docs, tests, prompts, and UI copy.
 - Run `npm run audit:public` before committing or pushing.
