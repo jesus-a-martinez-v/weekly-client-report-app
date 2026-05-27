@@ -1,4 +1,8 @@
-# CLAUDE.md - Weekly Client Reports
+# AGENTS.md - Weekly Client Reports
+
+Agent guidance for this repo. Read by Codex, Cursor, Aider, and any other tool
+that follows the [AGENTS.md convention](https://agents.md). Claude Code reads
+[`CLAUDE.md`](./CLAUDE.md), which mirrors this file — keep them in sync.
 
 This is a single-operator admin app for generating weekly client status reports.
 It fetches repository activity, writes a non-technical narrative, renders a PDF,
