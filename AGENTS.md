@@ -9,13 +9,6 @@ It fetches repository activity, writes a non-technical narrative, renders a PDF,
 creates a draft through an external email workflow, sends a notification, and
 lets the operator review the result in the app.
 
-## Status
-
-- Phases 1–4 are complete.
-- The public repository must not contain private prompts, production URLs, private
-  client names, personal emails, local absolute paths, infrastructure topology, or
-  real credentials.
-
 ## Stack
 
 | Layer | Choice |
