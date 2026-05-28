@@ -11,6 +11,8 @@ Use this guide every session. No exceptions.
 
 > **No issue, no work.** Never write code or make changes without a corresponding open Linear issue.
 
+> **Every issue must be assigned to `jesus`.** No exceptions — not for sub-issues, quick fixes, or scratch tasks. An unassigned (or otherwise-assigned) issue is a bug; fix the assignee before doing anything else with it.
+
 Linear-specific notes:
 - Every issue has a stable identifier like `ENG-123` (team prefix + number). Always reference issues by this ID.
 - Workflow states drive intent: `Backlog → Todo → In Progress → In Review → Done` (or `Canceled`/`Duplicate`). The state is the status — never describe progress in prose when a state change communicates it.
@@ -24,9 +26,10 @@ Run this sequence before any planning or implementation:
 1. **Search** — use `list_issues` (filter by team, state, and keywords) to check if a matching issue already exists. Match by title, area, and intent.
 2. **Not found** → Create it (see Section 3).
 3. **Found** → Update scope/criteria if needed, add a comment on what you're about to do and why.
-4. **Move to `In Progress`** — set the workflow state on the issue before touching code.
-5. **Create a branch** — use Linear's suggested branch name (Copy git branch name) or follow the format `<username>/<issue-id>-<short-slug>` (e.g. `jesus/eng-42-add-users-index`). The issue ID in the branch name lets Linear auto-link the PR. Never work directly on `main`.
-6. **Comment the branch name** on the issue (covered in Section 4).
+4. **Verify assignee** — confirm the issue is assigned to `jesus`. If not, reassign before continuing.
+5. **Move to `In Progress`** — set the workflow state on the issue before touching code.
+6. **Create a branch** — use Linear's suggested branch name (Copy git branch name) or follow the format `<username>/<issue-id>-<short-slug>` (e.g. `jesus/eng-42-add-users-index`). The issue ID in the branch name lets Linear auto-link the PR. Never work directly on `main`.
+7. **Comment the branch name** on the issue (covered in Section 4).
 
 Applies to all tasks — including small changes and quick fixes.
 
@@ -73,7 +76,7 @@ Constraints, relevant files, links.
 - **Project** — attach to the active project if the work is part of a larger initiative (see Section 8).
 - **Cycle** — assign to the current cycle if the team runs cycles and the work is planned for it. Do not pull work into a cycle unilaterally — confirm first.
 - **Parent issue** — link to the parent if this is a sub-issue.
-- **Assignee** — always assign to `jesus-a-martinez-v` (or the equivalent Linear username); no exceptions.
+- **Assignee** — always `jesus` (see the hard rule in Section 1). Set this at creation, and re-check it whenever you touch an existing issue — if you find one assigned to someone else or no one, reassign it before continuing.
 
 ---
 
