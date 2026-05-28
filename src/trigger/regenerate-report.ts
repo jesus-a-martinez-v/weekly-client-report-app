@@ -6,12 +6,14 @@ import { auditLog, clients, reports } from "@/db/schema";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/pdf";
 import { uploadReportPdf } from "@/lib/blob";
+import { postN8n } from "@/lib/n8n";
+import { generateEmailDraft } from "@/lib/openrouter";
 import { bogotaDateISO, formatRange, reportFilename } from "@/lib/shared/window";
 
 const SYSTEM_ACTOR = "system";
 
-export const regenerateReportPdf = task({
-  id: "regenerate-report-pdf",
+export const regenerateReport = task({
+  id: "regenerate-report",
   maxDuration: 120,
   run: async ({ reportId }: { reportId: string }) => {
     const [row] = await db
@@ -23,6 +25,7 @@ export const regenerateReportPdf = task({
         windowStart: reports.windowStart,
         windowEnd: reports.windowEnd,
         narrativeMd: reports.narrativeMd,
+        gmailDraftId: reports.gmailDraftId,
       })
       .from(reports)
       .where(eq(reports.id, reportId));
@@ -32,7 +35,11 @@ export const regenerateReportPdf = task({
     if (!row.clientId) throw new Error("Report has no associated client");
 
     const [client] = await db
-      .select({ slug: clients.slug })
+      .select({
+        slug: clients.slug,
+        contactName: clients.contactName,
+        contactEmail: clients.contactEmail,
+      })
       .from(clients)
       .where(eq(clients.id, row.clientId));
 
@@ -58,17 +65,55 @@ export const regenerateReportPdf = task({
       body: buf,
     });
 
+    const email = await generateEmailDraft({
+      clientName: row.clientName,
+      contactName: client.contactName,
+      dateRange,
+      narrativeMd: row.narrativeMd,
+    });
+
+    const oldDraftId = row.gmailDraftId;
+    if (oldDraftId) {
+      try {
+        await postN8n({ action: "discard", draft_id: oldDraftId });
+      } catch {
+        // best-effort: don't block regeneration if the old draft can't be reached
+      }
+    }
+
+    const draftRes = await postN8n({
+      action: "draft",
+      to: client.contactEmail,
+      subject: email.subject,
+      body: email.body,
+      pdf_url: uploaded.url,
+      filename,
+      client_slug: client.slug,
+      week_label: row.weekLabel,
+    });
+
     await db
       .update(reports)
-      .set({ pdfBlobUrl: uploaded.url, pdfFilename: filename, updatedAt: sql`now()` })
+      .set({
+        pdfBlobUrl: uploaded.url,
+        pdfFilename: filename,
+        emailSubject: email.subject,
+        emailBody: email.body,
+        gmailDraftId: draftRes.draft_id,
+        updatedAt: sql`now()`,
+      })
       .where(eq(reports.id, reportId));
 
     await db.insert(auditLog).values({
       actorEmail: SYSTEM_ACTOR,
-      action: "report.pdf_regenerated",
+      action: "report.regenerated",
       entityType: "report",
       entityId: reportId,
-      payload: { pdfPathname: uploaded.pathname },
+      payload: {
+        pdfPathname: uploaded.pathname,
+        oldDraftId,
+        newDraftId: draftRes.draft_id,
+      },
     });
   },
 });
