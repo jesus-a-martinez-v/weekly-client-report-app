@@ -19,6 +19,7 @@
   "dependencies": {
     "@auth/core": "0.37.4",
     "@octokit/rest": "^22.0.1",
+    "@sentry/nextjs": "^10.54.0",
     "@tailwindcss/typography": "^0.5.19",
     "@trigger.dev/react-hooks": "^4.4.6",
     "@trigger.dev/sdk": "^4.4.6",
