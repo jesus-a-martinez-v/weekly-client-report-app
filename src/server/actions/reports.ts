@@ -11,7 +11,7 @@ import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
 import { reviseNarrative } from "@/lib/openrouter";
 import { generateClientReport } from "@/trigger/generate-client-report";
-import { regenerateReportPdf } from "@/trigger/regenerate-report-pdf";
+import { regenerateReport } from "@/trigger/regenerate-report";
 
 import { db } from "@/db";
 import { auditLog, clients, reports, runs } from "@/db/schema";
@@ -305,7 +305,7 @@ export async function updateReportNarrative(reportId: string, formData: FormData
     });
   });
 
-  await regenerateReportPdf.trigger({ reportId });
+  await regenerateReport.trigger({ reportId });
 
   revalidatePath(`/reports/${reportId}`);
 }
@@ -348,7 +348,7 @@ export async function rewriteReportNarrative(reportId: string, formData: FormDat
     });
   });
 
-  await regenerateReportPdf.trigger({ reportId });
+  await regenerateReport.trigger({ reportId });
   revalidatePath(`/reports/${reportId}`);
 }
 
