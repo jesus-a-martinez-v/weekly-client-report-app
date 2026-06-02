@@ -1,15 +1,14 @@
 import Link from "next/link";
 
-import { listClients } from "@/lib/db/repos";
-
 import { StatusPill } from "@/components/status-pill";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";
+import { loadClients } from "@/server/actions/clients";
 import { ToggleStatusForm } from "./toggle-status-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientsListPage(): Promise<JSX.Element> {
-  const all = await listClients();
+  const all = await loadClients();
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-10 flex items-end justify-between">

@@ -5,12 +5,33 @@ import {
   listClients,
   recordAuditEntry,
   updateRunStatus,
+  updateRunTriggerRunId,
 } from "@/lib/db/repos";
+import {
+  markRunCompletedFromSummary,
+  markRunSucceeded,
+  startRun,
+  type RunLifecycleDeps,
+} from "@/lib/services/runs";
 import { reportingWindow } from "@/lib/shared/window";
 import { sendDigestMessage } from "@/lib/clients/telegram";
 import { generateClientReport } from "./generate-client-report";
 
 const SYSTEM_ACTOR = "system";
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type TransactionCallback<T> = (tx: Transaction) => Promise<T>;
+
+const runServiceDeps = {
+  repo: {
+    createRun,
+    updateRunStatus,
+    updateRunTriggerRunId,
+  },
+  transaction: <T>(callback: TransactionCallback<T>): Promise<T> =>
+    db.transaction(callback),
+  recordAuditEntry,
+} satisfies RunLifecycleDeps;
 
 export const weeklyReportRun = schedules.task({
   id: "weekly-report-run",
@@ -21,19 +42,19 @@ export const weeklyReportRun = schedules.task({
     const window = reportingWindow(anchor);
     logger.info("Weekly run starting", { weekLabel: window.weekLabel });
 
-    const runId = await createRun({
+    const runId = await startRun({
       kind: "weekly",
       weekLabel: window.weekLabel,
       windowStart: window.start,
       windowEnd: window.end,
       triggerRunId: ctx.run.id,
-    });
+    }, runServiceDeps);
 
     const active = await listClients({ status: "active" });
 
     if (active.length === 0) {
       logger.warn("No active clients — nothing to fan out");
-      await updateRunStatus(runId, "succeeded");
+      await markRunSucceeded(runId, runServiceDeps);
       await sendDigestMessage({
         weekLabel: window.weekLabel,
         summary: { drafted: 0, quiet: 0, errors: 0 },
@@ -60,29 +81,15 @@ export const weeklyReportRun = schedules.task({
       }
     }
 
-    const finalStatus =
-      errors === 0 ? "succeeded" : drafted + quiet === 0 ? "failed" : "partial";
-
-    await db.transaction(async (tx) => {
-      await updateRunStatus(
-        runId,
-        finalStatus,
-        { errorMessage: errors > 0 ? `${errors} client report(s) failed` : null },
-        tx,
-      );
-      await recordAuditEntry({
+    const finalStatus = await markRunCompletedFromSummary(
+      runId,
+      {
         actorEmail: SYSTEM_ACTOR,
-        action: "run.completed",
-        entityType: "run",
-        entityId: runId,
-        payload: {
-          weekLabel: window.weekLabel,
-          summary: { drafted, quiet, errors },
-          status: finalStatus,
-        },
-        tx,
-      });
-    });
+        weekLabel: window.weekLabel,
+        summary: { drafted, quiet, errors },
+      },
+      runServiceDeps,
+    );
 
     await sendDigestMessage({
       weekLabel: window.weekLabel,
