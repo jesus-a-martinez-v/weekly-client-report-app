@@ -14,7 +14,8 @@ import { generateClientReport } from "@/trigger/generate-client-report";
 import { regenerateReport } from "@/trigger/regenerate-report";
 
 import { db } from "@/lib/db/client";
-import { auditLog, clients, reports, runs } from "@/lib/db/schema";
+import { clients, reports, runs } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -50,12 +51,13 @@ export async function sendReport(reportId: string) {
       .update(reports)
       .set({ status: "sent", sentAt: sql`now()`, updatedAt: sql`now()` })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.sent",
       entityType: "report",
       entityId: reportId,
       payload: { draftId: row.gmailDraftId },
+      tx,
     });
   });
 
@@ -100,12 +102,13 @@ export async function markReportSent(reportId: string) {
         updatedAt: sql`now()`,
       })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.marked_sent",
       entityType: "report",
       entityId: reportId,
       payload: { draftId: row.gmailDraftId, manual: true },
+      tx,
     });
   });
 
@@ -148,7 +151,7 @@ export async function deleteReport(reportId: string) {
 
   await db.transaction(async (tx) => {
     await tx.delete(reports).where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.delete",
       entityType: "report",
@@ -160,6 +163,7 @@ export async function deleteReport(reportId: string) {
         weekLabel: row.weekLabel,
         priorStatus: row.status,
       },
+      tx,
     });
   });
 
@@ -197,12 +201,13 @@ export async function discardReport(reportId: string) {
         updatedAt: sql`now()`,
       })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.discarded",
       entityType: "report",
       entityId: reportId,
       payload: { draftId: row.gmailDraftId },
+      tx,
     });
   });
 
@@ -266,12 +271,13 @@ export async function updateReportEmail(reportId: string, formData: FormData) {
         updatedAt: sql`now()`,
       })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.edited",
       entityType: "report",
       entityId: reportId,
       payload: { oldDraftId, newDraftId: draftRes.draft_id },
+      tx,
     });
   });
 
@@ -296,12 +302,13 @@ export async function updateReportNarrative(reportId: string, formData: FormData
       .update(reports)
       .set({ narrativeMd, updatedAt: sql`now()` })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.narrative_edited",
       entityType: "report",
       entityId: reportId,
       payload: { charCount: narrativeMd.length },
+      tx,
     });
   });
 
@@ -339,12 +346,13 @@ export async function rewriteReportNarrative(reportId: string, formData: FormDat
       .update(reports)
       .set({ narrativeMd: revised, updatedAt: sql`now()` })
       .where(eq(reports.id, reportId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "report.narrative_ai_revised",
       entityType: "report",
       entityId: reportId,
       payload: { instructions: instructions.slice(0, 500) },
+      tx,
     });
   });
 
@@ -384,7 +392,7 @@ export async function triggerOnDemandReport(formData: FormData) {
     .set({ triggerRunId: handle.id })
     .where(eq(runs.id, runRow.id));
 
-  await db.insert(auditLog).values({
+  await recordAuditEntry({
     actorEmail: email,
     action: "report.on_demand_triggered",
     entityType: "client",

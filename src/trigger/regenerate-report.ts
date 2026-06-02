@@ -2,7 +2,8 @@ import { task } from "@trigger.dev/sdk/v3";
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { auditLog, clients, reports } from "@/lib/db/schema";
+import { clients, reports } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/clients/pdf";
 import { uploadReportPdf } from "@/lib/clients/blob";
@@ -104,7 +105,7 @@ export const regenerateReport = task({
       })
       .where(eq(reports.id, reportId));
 
-    await db.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: SYSTEM_ACTOR,
       action: "report.regenerated",
       entityType: "report",

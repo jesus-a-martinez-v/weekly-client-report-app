@@ -2,7 +2,8 @@ import { task, logger } from "@trigger.dev/sdk/v3";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { auditLog, clients, projects, reports, runs } from "@/lib/db/schema";
+import { clients, projects, reports, runs } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
   generateEmailDraft,
@@ -258,7 +259,7 @@ export const generateClientReport = task({
             updatedAt: sql`now()`,
           })
           .where(eq(reports.id, reportId));
-        await tx.insert(auditLog).values({
+        await recordAuditEntry({
           actorEmail: SYSTEM_ACTOR,
           action: finalStatus === "quiet" ? "report.quiet" : "report.drafted",
           entityType: "report",
@@ -270,6 +271,7 @@ export const generateClientReport = task({
             pdfPathname: pdfPathname ?? null,
             totals: activity.totals,
           },
+          tx,
         });
       });
 
@@ -302,7 +304,7 @@ export const generateClientReport = task({
           updatedAt: sql`now()`,
         })
         .where(eq(reports.id, reportId));
-      await db.insert(auditLog).values({
+      await recordAuditEntry({
         actorEmail: SYSTEM_ACTOR,
         action: "report.failed",
         entityType: "report",

@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
-import { auditLog, schedules } from "@/lib/db/schema";
+import { schedules } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 import {
   SCHEDULE_DEFS,
   SCHEDULE_KINDS,
@@ -102,12 +103,13 @@ export async function upsertSchedule(kind: ScheduleKind, formData: FormData) {
       scheduleRowId = row?.id ?? null;
     }
 
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: auditAction,
       entityType: "schedule",
       entityId: scheduleRowId,
       payload: { kind, before, after },
+      tx,
     });
   });
 
@@ -129,12 +131,13 @@ export async function deleteSchedule(kind: ScheduleKind) {
 
   await db.transaction(async (tx) => {
     await tx.delete(schedules).where(eq(schedules.id, existing.id));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "schedule.deactivated",
       entityType: "schedule",
       entityId: existing.id,
       payload: { kind, triggerScheduleId: existing.triggerScheduleId },
+      tx,
     });
   });
 
