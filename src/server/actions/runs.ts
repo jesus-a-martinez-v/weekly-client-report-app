@@ -7,8 +7,8 @@ import { auth } from "@/lib/auth";
 import { deleteReportPdfs } from "@/lib/clients/blob";
 import { postN8n } from "@/lib/clients/n8n";
 import { db } from "@/lib/db/client";
-import { reports, runs } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import { reports } from "@/lib/db/schema";
+import { deleteRunById, findRunById, recordAuditEntry } from "@/lib/db/repos";
 
 const ACTIONABLE_DRAFT_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -22,7 +22,7 @@ async function actorEmail(): Promise<string> {
 export async function deleteRun(runId: string) {
   const email = await actorEmail();
 
-  const [run] = await db.select().from(runs).where(eq(runs.id, runId));
+  const run = await findRunById(runId);
   if (!run) throw new Error("Run not found");
 
   const children = await db
@@ -53,7 +53,7 @@ export async function deleteRun(runId: string) {
 
   await db.transaction(async (tx) => {
     // reports.runId has onDelete: cascade, so child reports are removed too
-    await tx.delete(runs).where(eq(runs.id, runId));
+    await deleteRunById(runId, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "run.delete",

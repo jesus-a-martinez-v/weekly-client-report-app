@@ -1,8 +1,8 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { clients, runs } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import { clients } from "@/lib/db/schema";
+import { createRun, recordAuditEntry, updateRunStatus } from "@/lib/db/repos";
 import { reportingWindow } from "@/lib/shared/window";
 import { sendDigestMessage } from "@/lib/clients/telegram";
 import { generateClientReport } from "./generate-client-report";
@@ -18,19 +18,13 @@ export const weeklyReportRun = schedules.task({
     const window = reportingWindow(anchor);
     logger.info("Weekly run starting", { weekLabel: window.weekLabel });
 
-    const [runRow] = await db
-      .insert(runs)
-      .values({
-        kind: "weekly",
-        weekLabel: window.weekLabel,
-        windowStart: window.start,
-        windowEnd: window.end,
-        status: "running",
-        triggerRunId: ctx.run.id,
-        startedAt: sql`now()`,
-      })
-      .returning({ id: runs.id });
-    const runId = runRow.id;
+    const runId = await createRun({
+      kind: "weekly",
+      weekLabel: window.weekLabel,
+      windowStart: window.start,
+      windowEnd: window.end,
+      triggerRunId: ctx.run.id,
+    });
 
     const active = await db
       .select({ id: clients.id, slug: clients.slug })
@@ -39,10 +33,7 @@ export const weeklyReportRun = schedules.task({
 
     if (active.length === 0) {
       logger.warn("No active clients — nothing to fan out");
-      await db
-        .update(runs)
-        .set({ status: "succeeded", finishedAt: sql`now()` })
-        .where(eq(runs.id, runId));
+      await updateRunStatus(runId, "succeeded");
       await sendDigestMessage({
         weekLabel: window.weekLabel,
         summary: { drafted: 0, quiet: 0, errors: 0 },
@@ -73,14 +64,12 @@ export const weeklyReportRun = schedules.task({
       errors === 0 ? "succeeded" : drafted + quiet === 0 ? "failed" : "partial";
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(runs)
-        .set({
-          status: finalStatus,
-          finishedAt: sql`now()`,
-          errorMessage: errors > 0 ? `${errors} client report(s) failed` : null,
-        })
-        .where(eq(runs.id, runId));
+      await updateRunStatus(
+        runId,
+        finalStatus,
+        { errorMessage: errors > 0 ? `${errors} client report(s) failed` : null },
+        tx,
+      );
       await recordAuditEntry({
         actorEmail: SYSTEM_ACTOR,
         action: "run.completed",

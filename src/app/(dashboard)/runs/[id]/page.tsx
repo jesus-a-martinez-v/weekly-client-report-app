@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db/client";
-import { reports, runs } from "@/lib/db/schema";
+import { reports } from "@/lib/db/schema";
+import { findRunById } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatRange } from "@/lib/shared/window";
@@ -20,10 +21,7 @@ export default async function RunDetailPage({
 }) {
   const { id } = await params;
 
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.id, id));
+  const run = await findRunById(id);
 
   if (!run) notFound();
 
