@@ -31,8 +31,8 @@ type YamlFile = { clients: YamlClient[] };
 
 async function main() {
   const { eq, sql } = await import("drizzle-orm");
-  const { db } = await import("../src/db");
-  const { auditLog, clients, projects } = await import("../src/db/schema");
+  const { db } = await import("../src/lib/db/client");
+  const { auditLog, clients, projects } = await import("../src/lib/db/schema");
 
   if (!YAML_PATH) {
     throw new Error("SEED_CLIENTS_PATH is required to run db:seed");

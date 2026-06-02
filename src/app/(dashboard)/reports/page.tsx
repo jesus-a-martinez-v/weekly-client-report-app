@@ -1,8 +1,8 @@
 import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/db";
-import { clients, reports } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { clients, reports } from "@/lib/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";

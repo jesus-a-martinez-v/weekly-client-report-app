@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
 
-import { db } from "@/db";
-import { auditLog, clients, reports } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, clients, reports } from "@/lib/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";

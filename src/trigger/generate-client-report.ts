@@ -1,8 +1,8 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { db } from "@/db";
-import { auditLog, clients, projects, reports, runs } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, clients, projects, reports, runs } from "@/lib/db/schema";
 import { fetchClientActivity } from "@/lib/octokit";
 import {
   generateEmailDraft,

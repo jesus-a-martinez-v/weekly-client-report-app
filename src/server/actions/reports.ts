@@ -13,8 +13,8 @@ import { reviseNarrative } from "@/lib/openrouter";
 import { generateClientReport } from "@/trigger/generate-client-report";
 import { regenerateReport } from "@/trigger/regenerate-report";
 
-import { db } from "@/db";
-import { auditLog, clients, reports, runs } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, clients, reports, runs } from "@/lib/db/schema";
 
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
 

@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
-import { reports, runs } from "@/db/schema";
+import { reports, runs } from "@/lib/db/schema";
 
 const sql = postgres(process.env.DATABASE_URL!);
 const db = drizzle(sql);

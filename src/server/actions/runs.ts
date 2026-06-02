@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { deleteReportPdfs } from "@/lib/blob";
 import { postN8n } from "@/lib/n8n";
-import { db } from "@/db";
-import { auditLog, reports, runs } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, reports, runs } from "@/lib/db/schema";
 
 const ACTIONABLE_DRAFT_STATUSES = new Set(["drafted", "quiet"]);
 

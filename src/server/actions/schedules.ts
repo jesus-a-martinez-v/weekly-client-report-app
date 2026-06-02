@@ -5,8 +5,8 @@ import { schedules as triggerSchedules } from "@trigger.dev/sdk/v3";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/db";
-import { auditLog, schedules } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, schedules } from "@/lib/db/schema";
 import {
   SCHEDULE_DEFS,
   SCHEDULE_KINDS,
