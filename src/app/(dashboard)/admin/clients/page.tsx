@@ -1,8 +1,6 @@
-import { asc } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/lib/db/client";
-import { clients, projects } from "@/lib/db/schema";
+import { listClients } from "@/lib/db/repos";
 
 import { StatusPill } from "@/components/status-pill";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";
@@ -10,20 +8,8 @@ import { ToggleStatusForm } from "./toggle-status-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientsListPage() {
-  const all = await db.select().from(clients).orderBy(asc(clients.name));
-  const allProjects = await db
-    .select()
-    .from(projects)
-    .orderBy(asc(projects.position));
-
-  const projectsByClient = new Map<string, typeof allProjects>();
-  for (const p of allProjects) {
-    const arr = projectsByClient.get(p.clientId) ?? [];
-    arr.push(p);
-    projectsByClient.set(p.clientId, arr);
-  }
-
+export default async function ClientsListPage(): Promise<JSX.Element> {
+  const all = await listClients();
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-10 flex items-end justify-between">
@@ -65,31 +51,35 @@ export default async function ClientsListPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((c) => {
-                const ps = projectsByClient.get(c.id) ?? [];
-                const repoCount = ps.reduce(
-                  (n, p) => n + (p.repos?.length ?? 0),
+              {all.map(({ client, projects }) => {
+                const repoCount = projects.reduce(
+                  (n, project) => n + (project.repos?.length ?? 0),
                   0,
                 );
                 return (
-                  <tr key={c.id} className="border-b hairline last:border-b-0">
+                  <tr
+                    key={client.id}
+                    className="border-b hairline last:border-b-0"
+                  >
                     <td className="px-5 py-3">
                       <Link
-                        href={`/admin/clients/${c.id}`}
+                        href={`/admin/clients/${client.id}`}
                         className="font-medium hover:underline"
                       >
-                        {c.name}
+                        {client.name}
                       </Link>
-                      <p className="text-xs text-zinc-500">{c.contactEmail}</p>
+                      <p className="text-xs text-zinc-500">
+                        {client.contactEmail}
+                      </p>
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-zinc-600">
-                      {c.slug}
+                      {client.slug}
                     </td>
                     <td className="px-5 py-3">
-                      <StatusPill status={c.status} />
+                      <StatusPill status={client.status} />
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">
-                      {ps.length}
+                      {projects.length}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">
                       {repoCount}
@@ -97,19 +87,19 @@ export default async function ClientsListPage() {
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <ToggleStatusForm
-                          id={c.id}
-                          currentStatus={c.status}
+                          id={client.id}
+                          currentStatus={client.status}
                         />
                         <Link
-                          href={`/admin/clients/${c.id}`}
+                          href={`/admin/clients/${client.id}`}
                           className="text-xs text-zinc-500 hover:text-zinc-900"
                         >
                           Edit
                         </Link>
                         <DeleteClientDialog
-                          clientId={c.id}
-                          clientName={c.name}
-                          clientSlug={c.slug}
+                          clientId={client.id}
+                          clientName={client.name}
+                          clientSlug={client.slug}
                           trigger={
                             <span className="text-xs text-zinc-400 hover:text-rose-600">
                               Delete

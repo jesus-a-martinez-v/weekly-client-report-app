@@ -1,18 +1,17 @@
-import { asc, eq } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/lib/db/client";
-import { clients } from "@/lib/db/schema";
+import { listClients } from "@/lib/db/repos";
 import { reportingWindow } from "@/lib/shared/window";
 import { triggerOnDemandReport } from "@/server/actions/reports";
 
 export const dynamic = "force-dynamic";
 
-export default async function OnDemandPage() {
-  const allClients = await db
-    .select({ id: clients.id, name: clients.name, status: clients.status })
-    .from(clients)
-    .orderBy(asc(clients.name));
+export default async function OnDemandPage(): Promise<JSX.Element> {
+  const allClients = (await listClients()).map(({ client }) => ({
+    id: client.id,
+    name: client.name,
+    status: client.status,
+  }));
 
   const active = allClients.filter((c) => c.status === "active");
   const disabled = allClients.filter((c) => c.status !== "active");

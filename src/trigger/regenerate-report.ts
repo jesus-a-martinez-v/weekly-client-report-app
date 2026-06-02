@@ -2,8 +2,8 @@ import { task } from "@trigger.dev/sdk/v3";
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { clients, reports } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import { reports } from "@/lib/db/schema";
+import { findClientById, recordAuditEntry } from "@/lib/db/repos";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/clients/pdf";
 import { uploadReportPdf } from "@/lib/clients/blob";
@@ -35,16 +35,10 @@ export const regenerateReport = task({
     if (!row.narrativeMd) throw new Error("Report has no narrative");
     if (!row.clientId) throw new Error("Report has no associated client");
 
-    const [client] = await db
-      .select({
-        slug: clients.slug,
-        contactName: clients.contactName,
-        contactEmail: clients.contactEmail,
-      })
-      .from(clients)
-      .where(eq(clients.id, row.clientId));
+    const clientRow = await findClientById(row.clientId);
 
-    if (!client) throw new Error("Client not found");
+    if (!clientRow) throw new Error("Client not found");
+    const { client } = clientRow;
 
     const dateRange = formatRange(row.windowStart, row.windowEnd);
     const startDateISO = bogotaDateISO(row.windowStart);

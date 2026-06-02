@@ -2,8 +2,13 @@ import { task, logger } from "@trigger.dev/sdk/v3";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { clients, projects, reports } from "@/lib/db/schema";
-import { createRun, recordAuditEntry, updateRunStatus } from "@/lib/db/repos";
+import { reports } from "@/lib/db/schema";
+import {
+  createRun,
+  findClientById,
+  recordAuditEntry,
+  updateRunStatus,
+} from "@/lib/db/repos";
 import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
   generateEmailDraft,
@@ -60,21 +65,15 @@ export const generateClientReport = task({
     payload: GenerateClientReportPayload,
     { ctx },
   ): Promise<GenerateClientReportResult> => {
-    const client = await db.query.clients.findFirst({
-      where: eq(clients.id, payload.clientId),
-    });
-    if (!client) throw new Error(`Client not found: ${payload.clientId}`);
+    const clientRow = await findClientById(payload.clientId);
+    if (!clientRow) throw new Error(`Client not found: ${payload.clientId}`);
 
+    const { client, projects: projectRows } = clientRow;
     if (client.status !== "active" && !payload.onDemand) {
       logger.info("Skipping disabled client", { clientId: client.id });
       throw new Error(`Client ${client.slug} is disabled and not on-demand`);
     }
 
-    const projectRows = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.clientId, client.id))
-      .orderBy(projects.position);
     if (projectRows.length === 0) {
       throw new Error(`Client ${client.slug} has no projects configured`);
     }

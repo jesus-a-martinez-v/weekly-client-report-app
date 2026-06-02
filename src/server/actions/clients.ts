@@ -1,15 +1,21 @@
 "use server";
 
-import { and, asc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { parseClientForm, type ProjectInput } from "@/lib/shared/validation/client";
+import { parseClientForm } from "@/lib/shared/validation/client";
 
 import { db } from "@/lib/db/client";
-import { clients, projects } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import {
+  createClient as createClientRecord,
+  deleteClientById,
+  findClientById,
+  recordAuditEntry,
+  setClientStatus,
+  setProjects,
+  updateClient as updateClientRecord,
+} from "@/lib/db/repos";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
@@ -18,121 +24,62 @@ async function actorEmail(): Promise<string> {
   return email;
 }
 
-async function loadClientSnapshot(id: string) {
-  const [client] = await db.select().from(clients).where(eq(clients.id, id));
-  if (!client) return null;
-  const proj = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.clientId, id))
-    .orderBy(asc(projects.position));
-  return { client, projects: proj };
-}
-
-export async function createClient(formData: FormData) {
+export async function createClient(formData: FormData): Promise<void> {
   const input = parseClientForm(formData);
   const email = await actorEmail();
 
   const newId = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(clients)
-      .values({
+    const clientId = await createClientRecord(
+      {
         name: input.name,
         slug: input.slug,
         contactName: input.contactName,
         contactEmail: input.contactEmail,
         tone: input.tone,
-      })
-      .returning({ id: clients.id });
-
-    if (input.projects.length > 0) {
-      await tx.insert(projects).values(
-        input.projects.map((p: ProjectInput, i: number) => ({
-          clientId: row.id,
-          name: p.name ?? null,
-          repos: p.repos,
-          position: i,
-        })),
-      );
-    }
+        projects: input.projects,
+      },
+      tx,
+    );
 
     await recordAuditEntry({
       actorEmail: email,
       action: "client.create",
       entityType: "client",
-      entityId: row.id,
+      entityId: clientId,
       payload: { slug: input.slug, projectCount: input.projects.length },
       tx,
     });
 
-    return row.id;
+    return clientId;
   });
 
   revalidatePath("/admin/clients");
   redirect(`/admin/clients/${newId}`);
 }
 
-export async function updateClient(id: string, formData: FormData) {
+export async function updateClient(
+  id: string,
+  formData: FormData,
+): Promise<void> {
   const input = parseClientForm(formData);
   const email = await actorEmail();
 
   await db.transaction(async (tx) => {
-    const before = await tx.select().from(clients).where(eq(clients.id, id));
-    if (before.length === 0) throw new Error("Client not found");
+    const before = await findClientById(id, tx);
+    if (!before) throw new Error("Client not found");
 
-    await tx
-      .update(clients)
-      .set({
+    await updateClientRecord(
+      id,
+      {
         name: input.name,
         slug: input.slug,
         contactName: input.contactName,
         contactEmail: input.contactEmail,
         tone: input.tone,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(clients.id, id));
-
-    const existing = await tx
-      .select()
-      .from(projects)
-      .where(eq(projects.clientId, id));
-
-    const incomingIds = new Set(
-      input.projects.map((p) => p.id).filter((v): v is string => !!v),
+      },
+      tx,
     );
-    const toDelete = existing
-      .filter((p) => !incomingIds.has(p.id))
-      .map((p) => p.id);
-
-    if (toDelete.length > 0) {
-      await tx
-        .delete(projects)
-        .where(
-          and(
-            eq(projects.clientId, id),
-            sql`${projects.id} = ANY(${toDelete}::uuid[])`,
-          ),
-        );
-    }
-
-    for (let i = 0; i < input.projects.length; i++) {
-      const p = input.projects[i];
-      if (p.id) {
-        await tx
-          .update(projects)
-          .set({ name: p.name ?? null, repos: p.repos, position: i })
-          .where(eq(projects.id, p.id));
-      } else {
-        await tx
-          .insert(projects)
-          .values({
-            clientId: id,
-            name: p.name ?? null,
-            repos: p.repos,
-            position: i,
-          });
-      }
-    }
+    await setProjects(id, input.projects, tx);
 
     await recordAuditEntry({
       actorEmail: email,
@@ -148,25 +95,19 @@ export async function updateClient(id: string, formData: FormData) {
   revalidatePath(`/admin/clients/${id}`);
 }
 
-export async function toggleClientStatus(id: string) {
+export async function toggleClientStatus(id: string): Promise<void> {
   const email = await actorEmail();
   await db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ status: clients.status })
-      .from(clients)
-      .where(eq(clients.id, id));
+    const row = await findClientById(id, tx);
     if (!row) throw new Error("Client not found");
-    const next = row.status === "active" ? "disabled" : "active";
-    await tx
-      .update(clients)
-      .set({ status: next, updatedAt: sql`now()` })
-      .where(eq(clients.id, id));
+    const next = row.client.status === "active" ? "disabled" : "active";
+    await setClientStatus(id, next, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "client.toggle",
       entityType: "client",
       entityId: id,
-      payload: { from: row.status, to: next },
+      payload: { from: row.client.status, to: next },
       tx,
     });
   });
@@ -175,16 +116,19 @@ export async function toggleClientStatus(id: string) {
   revalidatePath(`/admin/clients/${id}`);
 }
 
-export async function deleteClient(id: string, typedSlug: string) {
+export async function deleteClient(
+  id: string,
+  typedSlug: string,
+): Promise<void> {
   const email = await actorEmail();
-  const snapshot = await loadClientSnapshot(id);
+  const snapshot = await findClientById(id);
   if (!snapshot) throw new Error("Client not found");
   if (snapshot.client.slug !== typedSlug) {
     throw new Error("Slug confirmation does not match");
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(clients).where(eq(clients.id, id));
+    await deleteClientById(id, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "client.delete",

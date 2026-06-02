@@ -1,8 +1,6 @@
-import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
-import { db } from "@/lib/db/client";
-import { clients, projects } from "@/lib/db/schema";
+import { findClientById } from "@/lib/db/repos";
 
 import { ClientForm } from "@/components/client-form";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";
@@ -16,33 +14,27 @@ export default async function EditClientPage({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<JSX.Element> {
   const { id } = await params;
 
-  const [client] = await db.select().from(clients).where(eq(clients.id, id));
-  if (!client) notFound();
-
-  const projectRows = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.clientId, id))
-    .orderBy(asc(projects.position));
+  const row = await findClientById(id);
+  if (!row) notFound();
 
   const initial = {
-    id: client.id,
-    name: client.name,
-    slug: client.slug,
-    contactName: client.contactName,
-    contactEmail: client.contactEmail,
-    tone: client.tone,
-    projects: projectRows.map((p) => ({
-      id: p.id,
-      name: p.name ?? "",
-      repos: p.repos as string[],
+    id: row.client.id,
+    name: row.client.name,
+    slug: row.client.slug,
+    contactName: row.client.contactName,
+    contactEmail: row.client.contactEmail,
+    tone: row.client.tone,
+    projects: row.projects.map((project) => ({
+      id: project.id,
+      name: project.name ?? "",
+      repos: project.repos,
     })),
   };
 
-  const bound = updateClient.bind(null, client.id);
+  const bound = updateClient.bind(null, row.client.id);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -51,16 +43,21 @@ export default async function EditClientPage({
       </p>
       <div className="mt-2 flex items-start justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-medium tracking-tight">{client.name}</h1>
+          <h1 className="text-3xl font-medium tracking-tight">
+            {row.client.name}
+          </h1>
           <div className="mt-2 flex items-center gap-3 text-sm text-zinc-600">
-            <span className="font-mono">{client.slug}</span>
-            <StatusPill status={client.status} />
+            <span className="font-mono">{row.client.slug}</span>
+            <StatusPill status={row.client.status} />
           </div>
         </div>
         <div className="text-right">
-          <ToggleStatusForm id={client.id} currentStatus={client.status} />
+          <ToggleStatusForm
+            id={row.client.id}
+            currentStatus={row.client.status}
+          />
           <p className="mt-1 text-xs text-zinc-400">
-            {client.status === "active"
+            {row.client.status === "active"
               ? "Included in weekly run"
               : "Skipped on weekly run"}
           </p>
@@ -86,9 +83,9 @@ export default async function EditClientPage({
             <span className="font-medium">Disable</span> for a temporary stop.
           </p>
           <DeleteClientDialog
-            clientId={client.id}
-            clientName={client.name}
-            clientSlug={client.slug}
+            clientId={row.client.id}
+            clientName={row.client.name}
+            clientSlug={row.client.slug}
           />
         </div>
       </section>
