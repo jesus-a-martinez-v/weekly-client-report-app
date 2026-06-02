@@ -14,7 +14,14 @@ import {
   updateReportPdf,
   updateReportStatus,
   updateRunStatus,
+  updateRunTriggerRunId,
 } from "@/lib/db/repos";
+import {
+  markRunFailed,
+  markRunSucceeded,
+  startRun,
+  type RunLifecycleDeps,
+} from "@/lib/services/runs";
 import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
   generateEmailDraft,
@@ -36,6 +43,20 @@ import {
 
 const SYSTEM_ACTOR = "system";
 
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type TransactionCallback<T> = (tx: Transaction) => Promise<T>;
+
+const runServiceDeps = {
+  repo: {
+    createRun,
+    updateRunStatus,
+    updateRunTriggerRunId,
+  },
+  transaction: <T>(callback: TransactionCallback<T>): Promise<T> =>
+    db.transaction(callback),
+  recordAuditEntry,
+} satisfies RunLifecycleDeps;
+
 export type GenerateClientReportPayload = {
   clientId: string;
   weekLabel?: string;
@@ -55,13 +76,13 @@ async function ensureRun(
   triggerRunId: string,
 ): Promise<string> {
   if (payload.runId) return payload.runId;
-  return createRun({
+  return startRun({
     kind: payload.onDemand ? "on_demand" : "weekly",
     weekLabel: window.weekLabel,
     windowStart: window.start,
     windowEnd: window.end,
     triggerRunId,
-  });
+  }, runServiceDeps);
 }
 
 export const generateClientReport = task({
@@ -239,7 +260,7 @@ export const generateClientReport = task({
       });
 
       if (ownsRun) {
-        await updateRunStatus(runId, "succeeded");
+        await markRunSucceeded(runId, runServiceDeps);
       }
 
       logger.info("Report drafted", {
@@ -269,9 +290,7 @@ export const generateClientReport = task({
         },
       });
       if (ownsRun) {
-        await updateRunStatus(runId, "failed", {
-          errorMessage: message.slice(0, 2000),
-        });
+        await markRunFailed(runId, message.slice(0, 2000), runServiceDeps);
       }
       logger.error("Report failed", { clientSlug: client.slug, error: message });
       throw err;

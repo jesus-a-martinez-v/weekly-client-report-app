@@ -1,19 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { deleteReportPdfs } from "@/lib/clients/blob";
-import { postN8n } from "@/lib/clients/n8n";
-import { db } from "@/lib/db/client";
+import { parseOnDemandForm } from "@/lib/shared/validation/report";
 import {
-  deleteRunById,
-  findRunById,
-  listReportsForRun,
-  recordAuditEntry,
-} from "@/lib/db/repos";
-
-const ACTIONABLE_DRAFT_STATUSES = new Set(["drafted", "quiet"]);
+  deleteRun as deleteRunInService,
+  triggerOnDemandRun,
+} from "@/lib/services/runs";
+import { runServiceDeps } from "./run-service-deps";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
@@ -22,48 +18,20 @@ async function actorEmail(): Promise<string> {
   return email;
 }
 
-export async function deleteRun(runId: string) {
-  const email = await actorEmail();
-
-  const run = await findRunById(runId);
-  if (!run) throw new Error("Run not found");
-
-  const children = await listReportsForRun(runId);
-
-  for (const r of children) {
-    if (ACTIONABLE_DRAFT_STATUSES.has(r.status) && r.gmailDraftId) {
-      try {
-        await postN8n({ action: "discard", draft_id: r.gmailDraftId });
-      } catch {
-        // best-effort: continue even if the draft can't be reached
-      }
-    }
-  }
-
-  try {
-    await deleteReportPdfs(children.map((r) => r.pdfBlobUrl));
-  } catch {
-    // best-effort: still delete the run even if blob cleanup fails
-  }
-
-  await db.transaction(async (tx) => {
-    // The child-report foreign key cascades, so deleting the run removes them.
-    await deleteRunById(runId, tx);
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "run.delete",
-      entityType: "run",
-      entityId: null,
-      payload: {
-        runId,
-        weekLabel: run.weekLabel,
-        kind: run.kind,
-        reportCount: children.length,
-      },
-      tx,
-    });
-  });
+export async function deleteRun(runId: string): Promise<void> {
+  await deleteRunInService(runId, await actorEmail(), runServiceDeps);
 
   revalidatePath("/runs");
   revalidatePath("/reports");
+}
+
+export async function triggerOnDemandReport(
+  formData: FormData,
+): Promise<void> {
+  const runId = await triggerOnDemandRun(
+    parseOnDemandForm(formData),
+    await actorEmail(),
+    runServiceDeps,
+  );
+  redirect(`/runs/${runId}`);
 }

@@ -1,31 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { deleteReportPdfs } from "@/lib/clients/blob";
-import { postN8n } from "@/lib/clients/n8n";
-import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
-import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
-import { reviseNarrative } from "@/lib/clients/openrouter";
-import { generateClientReport } from "@/trigger/generate-client-report";
-import { regenerateReport } from "@/trigger/regenerate-report";
-
-import { db } from "@/lib/db/client";
+import { parseEmailEditForm } from "@/lib/shared/validation/report";
 import {
-  createRun,
-  deleteReport as deleteReportRow,
-  findClientById,
-  findReportById,
-  recordAuditEntry,
-  updateReportEmail as updateReportEmailRow,
-  updateReportNarrative as updateReportNarrativeRow,
-  updateReportStatus,
-  updateRunTriggerRunId,
-} from "@/lib/db/repos";
-
-const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
+  deleteReport as deleteReportInService,
+  discardReport as discardReportInService,
+  markReportSent as markReportSentInService,
+  reviseNarrative as reviseNarrativeInService,
+  sendReport as sendReportInService,
+  updateEmailDraft,
+  updateNarrative,
+  type ReportMutationResult,
+} from "@/lib/services/reports";
+import { reportServiceDeps } from "./report-service-deps";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
@@ -34,297 +23,84 @@ async function actorEmail(): Promise<string> {
   return email;
 }
 
-export async function sendReport(reportId: string) {
-  const email = await actorEmail();
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status))
-    throw new Error(`Cannot send a report with status "${row.status}"`);
-  if (!row.gmailDraftId) throw new Error("Report has no Gmail draft id");
-
-  await postN8n({ action: "send", draft_id: row.gmailDraftId });
-
-  await db.transaction(async (tx) => {
-    await updateReportStatus(reportId, "sent", { sentAtNow: true }, tx);
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.sent",
-      entityType: "report",
-      entityId: reportId,
-      payload: { draftId: row.gmailDraftId },
-      tx,
-    });
-  });
-
+function revalidateReportMutation(result: ReportMutationResult): void {
   revalidatePath("/reports");
-  revalidatePath(`/reports/${reportId}`);
-  revalidatePath(`/runs/${row.runId}`);
+  revalidatePath(`/reports/${result.reportId}`);
+  revalidatePath(`/runs/${result.runId}`);
 }
 
-export async function markReportSent(reportId: string) {
-  const email = await actorEmail();
+export async function sendReport(reportId: string): Promise<void> {
+  const result = await sendReportInService(
+    reportId,
+    await actorEmail(),
+    reportServiceDeps,
+  );
+  revalidateReportMutation(result);
+}
 
-  const row = await findReportById(reportId);
+export async function markReportSent(reportId: string): Promise<void> {
+  const result = await markReportSentInService(
+    reportId,
+    await actorEmail(),
+    reportServiceDeps,
+  );
+  revalidateReportMutation(result);
+}
 
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status))
-    throw new Error(`Cannot mark a report with status "${row.status}" as sent`);
+export async function discardReport(reportId: string): Promise<void> {
+  const result = await discardReportInService(
+    reportId,
+    await actorEmail(),
+    reportServiceDeps,
+  );
+  revalidateReportMutation(result);
+}
 
-  if (row.gmailDraftId) {
-    try {
-      await postN8n({ action: "discard", draft_id: row.gmailDraftId });
-    } catch {
-      // best-effort: the report was sent through another channel; don't block
-      // the DB transition if the upstream draft can't be reached.
-    }
-  }
-
-  await db.transaction(async (tx) => {
-    await updateReportStatus(
-      reportId,
-      "sent",
-      { sentAtNow: true, clearDraft: true },
-      tx,
-    );
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.marked_sent",
-      entityType: "report",
-      entityId: reportId,
-      payload: { draftId: row.gmailDraftId, manual: true },
-      tx,
-    });
-  });
-
+export async function deleteReport(reportId: string): Promise<void> {
+  const result = await deleteReportInService(
+    reportId,
+    await actorEmail(),
+    reportServiceDeps,
+  );
   revalidatePath("/reports");
-  revalidatePath(`/reports/${reportId}`);
-  revalidatePath(`/runs/${row.runId}`);
+  revalidatePath(`/runs/${result.runId}`);
 }
 
-export async function deleteReport(reportId: string) {
-  const email = await actorEmail();
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-
-  if (ACTIONABLE_STATUSES.has(row.status) && row.gmailDraftId) {
-    try {
-      await postN8n({ action: "discard", draft_id: row.gmailDraftId });
-    } catch {
-      // best-effort: still delete the row even if the draft can't be reached
-    }
-  }
-
-  try {
-    await deleteReportPdfs([row.pdfBlobUrl]);
-  } catch {
-    // best-effort: still delete the row even if the blob can't be reached
-  }
-
-  await db.transaction(async (tx) => {
-    await deleteReportRow(reportId, tx);
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.delete",
-      entityType: "report",
-      entityId: null,
-      payload: {
-        reportId,
-        runId: row.runId,
-        clientName: row.clientName,
-        weekLabel: row.weekLabel,
-        priorStatus: row.status,
-      },
-      tx,
-    });
-  });
-
-  revalidatePath("/reports");
-  revalidatePath(`/runs/${row.runId}`);
-}
-
-export async function discardReport(reportId: string) {
-  const email = await actorEmail();
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status))
-    throw new Error(`Cannot discard a report with status "${row.status}"`);
-  if (!row.gmailDraftId) throw new Error("Report has no Gmail draft id");
-
-  await postN8n({ action: "discard", draft_id: row.gmailDraftId });
-
-  await db.transaction(async (tx) => {
-    await updateReportStatus(
-      reportId,
-      "discarded",
-      { discardedAtNow: true, clearDraft: true },
-      tx,
-    );
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.discarded",
-      entityType: "report",
-      entityId: reportId,
-      payload: { draftId: row.gmailDraftId },
-      tx,
-    });
-  });
-
-  revalidatePath("/reports");
-  revalidatePath(`/reports/${reportId}`);
-  revalidatePath(`/runs/${row.runId}`);
-}
-
-export async function updateReportEmail(reportId: string, formData: FormData) {
-  const input = parseEmailEditForm(formData);
-  const email = await actorEmail();
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status))
-    throw new Error(`Cannot edit a report with status "${row.status}"`);
-  if (!row.gmailDraftId) throw new Error("Report has no Gmail draft id");
-  if (!row.clientId) throw new Error("Report has no associated client");
-
-  const clientRow = await findClientById(row.clientId);
-  const client = clientRow?.client;
-
-  if (!client) throw new Error("Client not found");
-
-  const oldDraftId = row.gmailDraftId;
-  await postN8n({ action: "discard", draft_id: oldDraftId });
-
-  const draftRes = await postN8n({
-    action: "draft",
-    to: client.contactEmail,
-    subject: input.subject,
-    body: input.body,
-    pdf_url: row.pdfBlobUrl ?? undefined,
-    filename: row.pdfBlobUrl ? (row.pdfFilename ?? undefined) : undefined,
-    client_slug: client.slug,
-    week_label: row.weekLabel,
-  });
-
-  await db.transaction(async (tx) => {
-    await updateReportEmailRow(
-      reportId,
-      {
-        subject: input.subject,
-        body: input.body,
-        gmailDraftId: draftRes.draft_id,
-      },
-      tx,
-    );
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.edited",
-      entityType: "report",
-      entityId: reportId,
-      payload: { oldDraftId, newDraftId: draftRes.draft_id },
-      tx,
-    });
-  });
-
+export async function updateReportEmail(
+  reportId: string,
+  formData: FormData,
+): Promise<void> {
+  await updateEmailDraft(
+    reportId,
+    parseEmailEditForm(formData),
+    await actorEmail(),
+    reportServiceDeps,
+  );
   revalidatePath(`/reports/${reportId}`);
 }
 
-export async function updateReportNarrative(reportId: string, formData: FormData) {
-  const email = await actorEmail();
-  const narrativeMd = formData.get("narrativeMd") as string;
-  if (!narrativeMd?.trim()) throw new Error("Narrative cannot be empty");
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
-
-  await db.transaction(async (tx) => {
-    await updateReportNarrativeRow(reportId, narrativeMd, tx);
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.narrative_edited",
-      entityType: "report",
-      entityId: reportId,
-      payload: { charCount: narrativeMd.length },
-      tx,
-    });
-  });
-
-  await regenerateReport.trigger({ reportId });
-
+export async function updateReportNarrative(
+  reportId: string,
+  formData: FormData,
+): Promise<void> {
+  await updateNarrative(
+    reportId,
+    String(formData.get("narrativeMd") ?? ""),
+    await actorEmail(),
+    reportServiceDeps,
+  );
   revalidatePath(`/reports/${reportId}`);
 }
 
-export async function rewriteReportNarrative(reportId: string, formData: FormData) {
-  const email = await actorEmail();
-  const instructions = (formData.get("instructions") as string)?.trim();
-  if (!instructions) throw new Error("Instructions cannot be empty");
-
-  const row = await findReportById(reportId);
-
-  if (!row) throw new Error("Report not found");
-  if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
-  if (!row.narrativeMd) throw new Error("No narrative to revise");
-
-  const revised = await reviseNarrative({
-    clientName: row.clientName,
-    currentNarrative: row.narrativeMd,
-    instructions,
-  });
-
-  await db.transaction(async (tx) => {
-    await updateReportNarrativeRow(reportId, revised, tx);
-    await recordAuditEntry({
-      actorEmail: email,
-      action: "report.narrative_ai_revised",
-      entityType: "report",
-      entityId: reportId,
-      payload: { instructions: instructions.slice(0, 500) },
-      tx,
-    });
-  });
-
-  await regenerateReport.trigger({ reportId });
+export async function rewriteReportNarrative(
+  reportId: string,
+  formData: FormData,
+): Promise<void> {
+  await reviseNarrativeInService(
+    reportId,
+    String(formData.get("instructions") ?? ""),
+    await actorEmail(),
+    reportServiceDeps,
+  );
   revalidatePath(`/reports/${reportId}`);
-}
-
-export async function triggerOnDemandReport(formData: FormData) {
-  const input = parseOnDemandForm(formData);
-  const email = await actorEmail();
-
-  const window = input.weekLabel
-    ? isoWeekToWindow(input.weekLabel)
-    : reportingWindow();
-
-  const runId = await createRun({
-    kind: "on_demand",
-    weekLabel: window.weekLabel,
-    windowStart: window.start,
-    windowEnd: window.end,
-  });
-
-  const handle = await generateClientReport.trigger({
-    clientId: input.clientId,
-    weekLabel: window.weekLabel,
-    runId,
-    onDemand: true,
-  });
-
-  await updateRunTriggerRunId(runId, handle.id);
-
-  await recordAuditEntry({
-    actorEmail: email,
-    action: "report.on_demand_triggered",
-    entityType: "client",
-    entityId: input.clientId,
-    payload: { clientId: input.clientId, weekLabel: window.weekLabel, runId },
-  });
-
-  redirect(`/runs/${runId}`);
 }

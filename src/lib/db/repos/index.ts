@@ -48,6 +48,7 @@ export {
   deleteReport,
   findReportByClientWeek,
   findReportById,
+  hasInFlightReportForClient,
   listReports,
   listReportsForRun,
   listReportClientsByRun,

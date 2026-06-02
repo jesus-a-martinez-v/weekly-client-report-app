@@ -1,13 +1,13 @@
 import Link from "next/link";
 
-import { listClients } from "@/lib/db/repos";
 import { reportingWindow } from "@/lib/shared/window";
-import { triggerOnDemandReport } from "@/server/actions/reports";
+import { loadClients } from "@/server/actions/clients";
+import { triggerOnDemandReport } from "@/server/actions/runs";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnDemandPage(): Promise<JSX.Element> {
-  const allClients = (await listClients()).map(({ client }) => ({
+  const allClients = (await loadClients()).map(({ client }) => ({
     id: client.id,
     name: client.name,
     status: client.status,

@@ -3,6 +3,7 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   isNull,
   lt,
   sql,
@@ -87,6 +88,13 @@ export type StaleDraftReport = {
   weekLabel: string;
   createdAt: Date;
 };
+
+const IN_FLIGHT_REPORT_STATUSES = [
+  "pending",
+  "fetching",
+  "narrating",
+  "rendering",
+];
 
 function now(): Date {
   return sql`now()` as unknown as Date;
@@ -202,6 +210,24 @@ export async function listStaleDraftReports(
       ),
     )
     .orderBy(asc(reports.createdAt));
+}
+
+export async function hasInFlightReportForClient(
+  clientId: string,
+  executor: ReportExecutor = db,
+): Promise<boolean> {
+  const [row] = await executor
+    .select({ id: reports.id })
+    .from(reports)
+    .where(
+      and(
+        eq(reports.clientId, clientId),
+        inArray(reports.status, IN_FLIGHT_REPORT_STATUSES),
+      ),
+    )
+    .limit(1);
+
+  return !!row;
 }
 
 export async function createReport(
