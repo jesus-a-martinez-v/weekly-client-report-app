@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { StatusPill } from "@/components/status-pill";
 import { upsertSchedule, deleteSchedule } from "@/server/actions/schedules";
 import { CURATED_TIMEZONES, type ScheduleKind } from "@/lib/shared/schedules";
-import type { ScheduleRow } from "@/server/actions/schedules";
+import type { ScheduleRow } from "@/lib/db/repos";
 
 const DAYS = [
   { value: "*", label: "Every day" },
