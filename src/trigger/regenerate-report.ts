@@ -1,9 +1,12 @@
 import { task } from "@trigger.dev/sdk/v3";
-import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
-import { findClientById, recordAuditEntry } from "@/lib/db/repos";
+import {
+  findClientById,
+  findReportById,
+  recordAuditEntry,
+  updateReportEmail,
+  updateReportPdf,
+} from "@/lib/db/repos";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/clients/pdf";
 import { uploadReportPdf } from "@/lib/clients/blob";
@@ -17,19 +20,7 @@ export const regenerateReport = task({
   id: "regenerate-report",
   maxDuration: 120,
   run: async ({ reportId }: { reportId: string }) => {
-    const [row] = await db
-      .select({
-        id: reports.id,
-        clientId: reports.clientId,
-        clientName: reports.clientName,
-        weekLabel: reports.weekLabel,
-        windowStart: reports.windowStart,
-        windowEnd: reports.windowEnd,
-        narrativeMd: reports.narrativeMd,
-        gmailDraftId: reports.gmailDraftId,
-      })
-      .from(reports)
-      .where(eq(reports.id, reportId));
+    const row = await findReportById(reportId);
 
     if (!row) throw new Error(`Report not found: ${reportId}`);
     if (!row.narrativeMd) throw new Error("Report has no narrative");
@@ -87,17 +78,15 @@ export const regenerateReport = task({
       week_label: row.weekLabel,
     });
 
-    await db
-      .update(reports)
-      .set({
-        pdfBlobUrl: uploaded.url,
-        pdfFilename: filename,
-        emailSubject: email.subject,
-        emailBody: email.body,
-        gmailDraftId: draftRes.draft_id,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(reports.id, reportId));
+    await updateReportPdf(reportId, {
+      pdfBlobUrl: uploaded.url,
+      pdfFilename: filename,
+    });
+    await updateReportEmail(reportId, {
+      subject: email.subject,
+      body: email.body,
+      gmailDraftId: draftRes.draft_id,
+    });
 
     await recordAuditEntry({
       actorEmail: SYSTEM_ACTOR,

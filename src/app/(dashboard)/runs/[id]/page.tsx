@@ -1,10 +1,7 @@
-import { asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
-import { findRunById } from "@/lib/db/repos";
+import { findRunById, listReportsForRun } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatRange } from "@/lib/shared/window";
@@ -25,19 +22,7 @@ export default async function RunDetailPage({
 
   if (!run) notFound();
 
-  const childReports = await db
-    .select({
-      id: reports.id,
-      clientName: reports.clientName,
-      status: reports.status,
-      totalsPrs: reports.totalsPrs,
-      totalsIssues: reports.totalsIssues,
-      totalsCommits: reports.totalsCommits,
-      updatedAt: reports.updatedAt,
-    })
-    .from(reports)
-    .where(eq(reports.runId, id))
-    .orderBy(asc(reports.clientName));
+  const childReports = await listReportsForRun(id);
 
   const runInflight = RUN_IN_FLIGHT.has(run.status);
   const anyChildInflight = childReports.some((r) => REPORT_IN_FLIGHT.has(r.status));
