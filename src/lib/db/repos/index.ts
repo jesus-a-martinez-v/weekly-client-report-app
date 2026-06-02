@@ -1,5 +1,4 @@
-// Barrel for repository modules. Repos (reportsRepo) will be added and
-// re-exported here.
+// Barrel for repository modules.
 import type { db } from "@/lib/db/client";
 
 /** Handle every repo receives by injection. */
@@ -44,3 +43,32 @@ export {
   updateRunTriggerRunId,
 } from "./runs";
 export type { CreateRunInput, UpdateRunStatusOptions } from "./runs";
+export {
+  createReport,
+  deleteReport,
+  findReportByClientWeek,
+  findReportById,
+  listReports,
+  listReportsForRun,
+  listReportClientsByRun,
+  listReportStatusTalliesByRun,
+  listStaleDraftReports,
+  resetReportForRun,
+  updateReportActivity,
+  updateReportEmail,
+  updateReportFailure,
+  updateReportNarrative,
+  updateReportPdf,
+  updateReportStatus,
+} from "./reports";
+export type {
+  CreateReportInput,
+  ReportClientForRun,
+  ReportListOptions,
+  ReportStatusTally,
+  StaleDraftReport,
+  UpdateReportActivityInput,
+  UpdateReportEmailInput,
+  UpdateReportPdfInput,
+  UpdateReportStatusOptions,
+} from "./reports";

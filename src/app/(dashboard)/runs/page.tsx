@@ -1,9 +1,10 @@
-import { asc, sql } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
-import { listRuns } from "@/lib/db/repos";
+import {
+  listReportClientsByRun,
+  listReportStatusTalliesByRun,
+  listRuns,
+} from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
@@ -25,22 +26,10 @@ function formatClients(names: string[]): { display: string; title?: string } {
 export default async function RunsPage() {
   const allRuns = await listRuns();
 
-  const tallies = await db
-    .select({
-      runId: reports.runId,
-      status: reports.status,
-      count: sql<number>`cast(count(*) as int)`,
-    })
-    .from(reports)
-    .groupBy(reports.runId, reports.status);
-
-  const clientRows = await db
-    .select({
-      runId: reports.runId,
-      clientName: reports.clientName,
-    })
-    .from(reports)
-    .orderBy(asc(reports.clientName));
+  const [tallies, clientRows] = await Promise.all([
+    listReportStatusTalliesByRun(),
+    listReportClientsByRun(),
+  ]);
 
   const tallyMap = new Map<string, Record<string, number>>();
   for (const t of tallies) {

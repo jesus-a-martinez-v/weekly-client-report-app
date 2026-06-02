@@ -1,8 +1,5 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { and, asc, isNull, lt, eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
-import { recordAuditEntries } from "@/lib/db/repos";
+import { listStaleDraftReports, recordAuditEntries } from "@/lib/db/repos";
 import { sendDraftedReminderMessage } from "@/lib/clients/telegram";
 
 const SYSTEM_ACTOR = "system";
@@ -16,23 +13,7 @@ export const draftedReminder = schedules.task({
     );
     const cutoff = new Date(Date.now() - thresholdHours * 3_600_000);
 
-    const stale = await db
-      .select({
-        id: reports.id,
-        clientName: reports.clientName,
-        weekLabel: reports.weekLabel,
-        createdAt: reports.createdAt,
-      })
-      .from(reports)
-      .where(
-        and(
-          eq(reports.status, "drafted"),
-          isNull(reports.sentAt),
-          isNull(reports.discardedAt),
-          lt(reports.createdAt, cutoff),
-        ),
-      )
-      .orderBy(asc(reports.createdAt));
+    const stale = await listStaleDraftReports(cutoff);
 
     if (stale.length === 0) {
       logger.info("No stale drafts to remind about");

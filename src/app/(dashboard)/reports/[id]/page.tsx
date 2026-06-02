@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { marked } from "marked";
 
 import { db } from "@/lib/db/client";
-import { auditLog, clients, reports } from "@/lib/db/schema";
+import { auditLog } from "@/lib/db/schema";
+import { findReportById } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
@@ -25,33 +26,7 @@ export default async function ReportDetailPage({
 }) {
   const { id } = await params;
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      clientId: reports.clientId,
-      clientName: reports.clientName,
-      weekLabel: reports.weekLabel,
-      windowStart: reports.windowStart,
-      windowEnd: reports.windowEnd,
-      status: reports.status,
-      totalsPrs: reports.totalsPrs,
-      totalsIssues: reports.totalsIssues,
-      totalsCommits: reports.totalsCommits,
-      narrativeMd: reports.narrativeMd,
-      emailSubject: reports.emailSubject,
-      emailBody: reports.emailBody,
-      pdfBlobUrl: reports.pdfBlobUrl,
-      pdfFilename: reports.pdfFilename,
-      gmailDraftId: reports.gmailDraftId,
-      sentAt: reports.sentAt,
-      discardedAt: reports.discardedAt,
-      errorMessage: reports.errorMessage,
-      createdAt: reports.createdAt,
-      updatedAt: reports.updatedAt,
-    })
-    .from(reports)
-    .where(eq(reports.id, id));
+  const row = await findReportById(id);
 
   if (!row) notFound();
 

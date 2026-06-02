@@ -1,8 +1,9 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import Link from "next/link";
 
 import { db } from "@/lib/db/client";
-import { clients, reports } from "@/lib/db/schema";
+import { clients } from "@/lib/db/schema";
+import { listReports } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
@@ -22,34 +23,11 @@ export default async function ReportsPage({
     .from(clients)
     .orderBy(asc(clients.name));
 
-  let query = db
-    .select({
-      id: reports.id,
-      clientId: reports.clientId,
-      clientName: reports.clientName,
-      weekLabel: reports.weekLabel,
-      windowStart: reports.windowStart,
-      windowEnd: reports.windowEnd,
-      status: reports.status,
-      totalsPrs: reports.totalsPrs,
-      totalsIssues: reports.totalsIssues,
-      totalsCommits: reports.totalsCommits,
-      createdAt: reports.createdAt,
-    })
-    .from(reports)
-    .$dynamic();
-
-  if (params.clientId) {
-    query = query.where(eq(reports.clientId, params.clientId));
-  }
-  if (params.status) {
-    query = query.where(eq(reports.status, params.status));
-  }
-  if (params.weekLabel) {
-    query = query.where(eq(reports.weekLabel, params.weekLabel));
-  }
-
-  const rows = await query.orderBy(desc(reports.createdAt));
+  const rows = await listReports({
+    clientId: params.clientId,
+    status: params.status,
+    weekLabel: params.weekLabel,
+  });
 
   const currentFilters = new URLSearchParams();
   if (params.clientId) currentFilters.set("clientId", params.clientId);

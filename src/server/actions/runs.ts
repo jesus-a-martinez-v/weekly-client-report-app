@@ -1,14 +1,17 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import { deleteReportPdfs } from "@/lib/clients/blob";
 import { postN8n } from "@/lib/clients/n8n";
 import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
-import { deleteRunById, findRunById, recordAuditEntry } from "@/lib/db/repos";
+import {
+  deleteRunById,
+  findRunById,
+  listReportsForRun,
+  recordAuditEntry,
+} from "@/lib/db/repos";
 
 const ACTIONABLE_DRAFT_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -25,15 +28,7 @@ export async function deleteRun(runId: string) {
   const run = await findRunById(runId);
   if (!run) throw new Error("Run not found");
 
-  const children = await db
-    .select({
-      id: reports.id,
-      status: reports.status,
-      gmailDraftId: reports.gmailDraftId,
-      pdfBlobUrl: reports.pdfBlobUrl,
-    })
-    .from(reports)
-    .where(eq(reports.runId, runId));
+  const children = await listReportsForRun(runId);
 
   for (const r of children) {
     if (ACTIONABLE_DRAFT_STATUSES.has(r.status) && r.gmailDraftId) {
@@ -52,7 +47,7 @@ export async function deleteRun(runId: string) {
   }
 
   await db.transaction(async (tx) => {
-    // reports.runId has onDelete: cascade, so child reports are removed too
+    // The child-report foreign key cascades, so deleting the run removes them.
     await deleteRunById(runId, tx);
     await recordAuditEntry({
       actorEmail: email,

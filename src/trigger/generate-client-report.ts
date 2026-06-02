@@ -1,12 +1,18 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
-import { and, eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { reports } from "@/lib/db/schema";
 import {
+  createReport,
   createRun,
   findClientById,
+  findReportByClientWeek,
   recordAuditEntry,
+  resetReportForRun,
+  updateReportActivity,
+  updateReportEmail,
+  updateReportFailure,
+  updateReportNarrative,
+  updateReportPdf,
+  updateReportStatus,
   updateRunStatus,
 } from "@/lib/db/repos";
 import { fetchClientActivity } from "@/lib/clients/octokit";
@@ -88,45 +94,29 @@ export const generateClientReport = task({
     const startDateISO = bogotaDateISO(window.start);
     const filename = reportFilename(client.name, startDateISO);
 
-    const existing = await db
-      .select({ id: reports.id })
-      .from(reports)
-      .where(
-        and(eq(reports.clientId, client.id), eq(reports.weekLabel, window.weekLabel)),
-      )
-      .limit(1);
+    const existing = await findReportByClientWeek(client.id, window.weekLabel);
 
     let reportId: string;
-    if (existing[0]) {
-      reportId = existing[0].id;
-      await db
-        .update(reports)
-        .set({
-          runId,
-          status: "fetching",
-          clientName: client.name,
-          windowStart: window.start,
-          windowEnd: window.end,
-          triggerRunId: ctx.run.id,
-          errorMessage: null,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(reports.id, reportId));
+    if (existing) {
+      reportId = existing.id;
+      await resetReportForRun(reportId, {
+        runId,
+        clientName: client.name,
+        windowStart: window.start,
+        windowEnd: window.end,
+        triggerRunId: ctx.run.id,
+      });
     } else {
-      const [row] = await db
-        .insert(reports)
-        .values({
-          runId,
-          clientId: client.id,
-          clientName: client.name,
-          weekLabel: window.weekLabel,
-          windowStart: window.start,
-          windowEnd: window.end,
-          status: "fetching",
-          triggerRunId: ctx.run.id,
-        })
-        .returning({ id: reports.id });
-      reportId = row.id;
+      reportId = await createReport({
+        runId,
+        clientId: client.id,
+        clientName: client.name,
+        weekLabel: window.weekLabel,
+        windowStart: window.start,
+        windowEnd: window.end,
+        status: "fetching",
+        triggerRunId: ctx.run.id,
+      });
     }
 
     try {
@@ -147,17 +137,12 @@ export const generateClientReport = task({
         activity.totals.issues === 0 &&
         activity.totals.commits === 0;
 
-      await db
-        .update(reports)
-        .set({
-          status: "narrating",
-          activityJson: activity,
-          totalsPrs: activity.totals.prs,
-          totalsIssues: activity.totals.issues,
-          totalsCommits: activity.totals.commits,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(reports.id, reportId));
+      await updateReportActivity(reportId, {
+        activityJson: activity,
+        totalsPrs: activity.totals.prs,
+        totalsIssues: activity.totals.issues,
+        totalsCommits: activity.totals.commits,
+      });
 
       const narrative = isQuiet
         ? quietWeekNarrative({
@@ -177,10 +162,8 @@ export const generateClientReport = task({
       let pdfPathname: string | undefined;
 
       if (!isQuiet) {
-        await db
-          .update(reports)
-          .set({ status: "rendering", narrativeMd: narrative, updatedAt: sql`now()` })
-          .where(eq(reports.id, reportId));
+        await updateReportStatus(reportId, "rendering");
+        await updateReportNarrative(reportId, narrative);
 
         const html = renderReportHtml({
           clientName: client.name,
@@ -199,19 +182,12 @@ export const generateClientReport = task({
         pdfUrl = uploaded.url;
         pdfPathname = uploaded.pathname;
 
-        await db
-          .update(reports)
-          .set({
-            pdfBlobUrl: pdfUrl,
-            pdfFilename: filename,
-            updatedAt: sql`now()`,
-          })
-          .where(eq(reports.id, reportId));
+        await updateReportPdf(reportId, {
+          pdfBlobUrl: pdfUrl,
+          pdfFilename: filename,
+        });
       } else {
-        await db
-          .update(reports)
-          .set({ narrativeMd: narrative, updatedAt: sql`now()` })
-          .where(eq(reports.id, reportId));
+        await updateReportNarrative(reportId, narrative);
       }
 
       const email = await generateEmailDraft({
@@ -221,14 +197,10 @@ export const generateClientReport = task({
         narrativeMd: narrative,
       });
 
-      await db
-        .update(reports)
-        .set({
-          emailSubject: email.subject,
-          emailBody: email.body,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(reports.id, reportId));
+      await updateReportEmail(reportId, {
+        subject: email.subject,
+        body: email.body,
+      });
 
       const draftRes = await postN8n({
         action: "draft",
@@ -244,14 +216,12 @@ export const generateClientReport = task({
       const finalStatus = isQuiet ? "quiet" : "drafted";
 
       await db.transaction(async (tx) => {
-        await tx
-          .update(reports)
-          .set({
-            gmailDraftId: draftRes.draft_id,
-            status: finalStatus,
-            updatedAt: sql`now()`,
-          })
-          .where(eq(reports.id, reportId));
+        await updateReportStatus(
+          reportId,
+          finalStatus,
+          { gmailDraftId: draftRes.draft_id },
+          tx,
+        );
         await recordAuditEntry({
           actorEmail: SYSTEM_ACTOR,
           action: finalStatus === "quiet" ? "report.quiet" : "report.drafted",
@@ -286,14 +256,7 @@ export const generateClientReport = task({
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await db
-        .update(reports)
-        .set({
-          status: "failed",
-          errorMessage: message.slice(0, 2000),
-          updatedAt: sql`now()`,
-        })
-        .where(eq(reports.id, reportId));
+      await updateReportFailure(reportId, message);
       await recordAuditEntry({
         actorEmail: SYSTEM_ACTOR,
         action: "report.failed",

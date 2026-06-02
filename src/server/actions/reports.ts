@@ -1,6 +1,5 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -14,10 +13,15 @@ import { generateClientReport } from "@/trigger/generate-client-report";
 import { regenerateReport } from "@/trigger/regenerate-report";
 
 import { db } from "@/lib/db/client";
-import { clients, reports } from "@/lib/db/schema";
 import {
   createRun,
+  deleteReport as deleteReportRow,
+  findClientById,
+  findReportById,
   recordAuditEntry,
+  updateReportEmail as updateReportEmailRow,
+  updateReportNarrative as updateReportNarrativeRow,
+  updateReportStatus,
   updateRunTriggerRunId,
 } from "@/lib/db/repos";
 
@@ -33,15 +37,7 @@ async function actorEmail(): Promise<string> {
 export async function sendReport(reportId: string) {
   const email = await actorEmail();
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      gmailDraftId: reports.gmailDraftId,
-      status: reports.status,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status))
@@ -51,10 +47,7 @@ export async function sendReport(reportId: string) {
   await postN8n({ action: "send", draft_id: row.gmailDraftId });
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({ status: "sent", sentAt: sql`now()`, updatedAt: sql`now()` })
-      .where(eq(reports.id, reportId));
+    await updateReportStatus(reportId, "sent", { sentAtNow: true }, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "report.sent",
@@ -73,15 +66,7 @@ export async function sendReport(reportId: string) {
 export async function markReportSent(reportId: string) {
   const email = await actorEmail();
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      gmailDraftId: reports.gmailDraftId,
-      status: reports.status,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status))
@@ -97,15 +82,12 @@ export async function markReportSent(reportId: string) {
   }
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({
-        status: "sent",
-        sentAt: sql`now()`,
-        gmailDraftId: null,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(reports.id, reportId));
+    await updateReportStatus(
+      reportId,
+      "sent",
+      { sentAtNow: true, clearDraft: true },
+      tx,
+    );
     await recordAuditEntry({
       actorEmail: email,
       action: "report.marked_sent",
@@ -124,18 +106,7 @@ export async function markReportSent(reportId: string) {
 export async function deleteReport(reportId: string) {
   const email = await actorEmail();
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      clientName: reports.clientName,
-      weekLabel: reports.weekLabel,
-      status: reports.status,
-      gmailDraftId: reports.gmailDraftId,
-      pdfBlobUrl: reports.pdfBlobUrl,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
 
@@ -154,7 +125,7 @@ export async function deleteReport(reportId: string) {
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(reports).where(eq(reports.id, reportId));
+    await deleteReportRow(reportId, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "report.delete",
@@ -178,15 +149,7 @@ export async function deleteReport(reportId: string) {
 export async function discardReport(reportId: string) {
   const email = await actorEmail();
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      gmailDraftId: reports.gmailDraftId,
-      status: reports.status,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status))
@@ -196,15 +159,12 @@ export async function discardReport(reportId: string) {
   await postN8n({ action: "discard", draft_id: row.gmailDraftId });
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({
-        status: "discarded",
-        discardedAt: sql`now()`,
-        gmailDraftId: null,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(reports.id, reportId));
+    await updateReportStatus(
+      reportId,
+      "discarded",
+      { discardedAtNow: true, clearDraft: true },
+      tx,
+    );
     await recordAuditEntry({
       actorEmail: email,
       action: "report.discarded",
@@ -224,19 +184,7 @@ export async function updateReportEmail(reportId: string, formData: FormData) {
   const input = parseEmailEditForm(formData);
   const email = await actorEmail();
 
-  const [row] = await db
-    .select({
-      id: reports.id,
-      runId: reports.runId,
-      status: reports.status,
-      gmailDraftId: reports.gmailDraftId,
-      pdfBlobUrl: reports.pdfBlobUrl,
-      pdfFilename: reports.pdfFilename,
-      weekLabel: reports.weekLabel,
-      clientId: reports.clientId,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status))
@@ -244,10 +192,8 @@ export async function updateReportEmail(reportId: string, formData: FormData) {
   if (!row.gmailDraftId) throw new Error("Report has no Gmail draft id");
   if (!row.clientId) throw new Error("Report has no associated client");
 
-  const [client] = await db
-    .select({ contactEmail: clients.contactEmail, slug: clients.slug })
-    .from(clients)
-    .where(eq(clients.id, row.clientId));
+  const clientRow = await findClientById(row.clientId);
+  const client = clientRow?.client;
 
   if (!client) throw new Error("Client not found");
 
@@ -266,15 +212,15 @@ export async function updateReportEmail(reportId: string, formData: FormData) {
   });
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({
-        emailSubject: input.subject,
-        emailBody: input.body,
+    await updateReportEmailRow(
+      reportId,
+      {
+        subject: input.subject,
+        body: input.body,
         gmailDraftId: draftRes.draft_id,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(reports.id, reportId));
+      },
+      tx,
+    );
     await recordAuditEntry({
       actorEmail: email,
       action: "report.edited",
@@ -293,19 +239,13 @@ export async function updateReportNarrative(reportId: string, formData: FormData
   const narrativeMd = formData.get("narrativeMd") as string;
   if (!narrativeMd?.trim()) throw new Error("Narrative cannot be empty");
 
-  const [row] = await db
-    .select({ status: reports.status })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({ narrativeMd, updatedAt: sql`now()` })
-      .where(eq(reports.id, reportId));
+    await updateReportNarrativeRow(reportId, narrativeMd, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "report.narrative_edited",
@@ -326,14 +266,7 @@ export async function rewriteReportNarrative(reportId: string, formData: FormDat
   const instructions = (formData.get("instructions") as string)?.trim();
   if (!instructions) throw new Error("Instructions cannot be empty");
 
-  const [row] = await db
-    .select({
-      status: reports.status,
-      narrativeMd: reports.narrativeMd,
-      clientName: reports.clientName,
-    })
-    .from(reports)
-    .where(eq(reports.id, reportId));
+  const row = await findReportById(reportId);
 
   if (!row) throw new Error("Report not found");
   if (!ACTIONABLE_STATUSES.has(row.status)) throw new Error("Report is not editable");
@@ -346,10 +279,7 @@ export async function rewriteReportNarrative(reportId: string, formData: FormDat
   });
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(reports)
-      .set({ narrativeMd: revised, updatedAt: sql`now()` })
-      .where(eq(reports.id, reportId));
+    await updateReportNarrativeRow(reportId, revised, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "report.narrative_ai_revised",
