@@ -1,16 +1,23 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
 import { schedules as triggerSchedules } from "@trigger.dev/sdk/v3";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
-import { schedules } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import {
+  deleteScheduleById,
+  findScheduleByKind,
+  loadManagedTriggerScheduleIds,
+  loadScheduleRows as loadScheduleRowsFromRepo,
+  insertScheduleMirror,
+  recordAuditEntry,
+  updateScheduleMirror,
+  type ScheduleMirrorInput,
+  type ScheduleRow,
+} from "@/lib/db/repos";
 import {
   SCHEDULE_DEFS,
-  SCHEDULE_KINDS,
   type ScheduleKind,
 } from "@/lib/shared/schedules";
 import { parseScheduleForm } from "@/lib/shared/validation/schedule";
@@ -24,7 +31,10 @@ async function actorEmail(): Promise<string> {
 
 type ScheduleObj = Awaited<ReturnType<typeof triggerSchedules.create>>;
 
-function mirrorValues(s: ScheduleObj, kind: ScheduleKind) {
+function mirrorValues(
+  s: ScheduleObj,
+  kind: ScheduleKind,
+): ScheduleMirrorInput {
   const def = SCHEDULE_DEFS[kind];
   return {
     triggerScheduleId: s.id,
@@ -32,10 +42,8 @@ function mirrorValues(s: ScheduleObj, kind: ScheduleKind) {
     externalId: def.deduplicationKey,
     cron: s.generator.expression,
     timezone: s.timezone,
-    active: String(s.active),
+    active: s.active,
     nextRun: s.nextRun ?? null,
-    lastSyncedAt: sql`now()` as unknown as Date,
-    updatedAt: sql`now()` as unknown as Date,
   };
 }
 
@@ -44,11 +52,7 @@ export async function upsertSchedule(kind: ScheduleKind, formData: FormData) {
   const input = parseScheduleForm(formData);
   const def = SCHEDULE_DEFS[kind];
 
-  const [existing] = await db
-    .select()
-    .from(schedules)
-    .where(eq(schedules.kind, kind))
-    .limit(1);
+  const existing = await findScheduleByKind(kind);
 
   let schedObj: ScheduleObj;
 
@@ -77,7 +81,11 @@ export async function upsertSchedule(kind: ScheduleKind, formData: FormData) {
 
   const auditAction = existing ? "schedule.updated" : "schedule.created";
   const before = existing
-    ? { cron: existing.cron, timezone: existing.timezone, active: existing.active }
+    ? {
+        cron: existing.cron,
+        timezone: existing.timezone,
+        active: String(existing.active),
+      }
     : null;
   const after = {
     cron: input.cron,
@@ -90,17 +98,10 @@ export async function upsertSchedule(kind: ScheduleKind, formData: FormData) {
     let scheduleRowId: string | null = null;
 
     if (existing) {
-      await tx
-        .update(schedules)
-        .set(mirror)
-        .where(eq(schedules.id, existing.id));
+      await updateScheduleMirror(existing.id, mirror, tx);
       scheduleRowId = existing.id;
     } else {
-      const [row] = await tx
-        .insert(schedules)
-        .values({ ...mirror, createdAt: sql`now()` as unknown as Date })
-        .returning({ id: schedules.id });
-      scheduleRowId = row?.id ?? null;
+      scheduleRowId = await insertScheduleMirror(mirror, tx);
     }
 
     await recordAuditEntry({
@@ -119,18 +120,14 @@ export async function upsertSchedule(kind: ScheduleKind, formData: FormData) {
 export async function deleteSchedule(kind: ScheduleKind) {
   const email = await actorEmail();
 
-  const [existing] = await db
-    .select()
-    .from(schedules)
-    .where(eq(schedules.kind, kind))
-    .limit(1);
+  const existing = await findScheduleByKind(kind);
 
   if (!existing) return;
 
   await triggerSchedules.del(existing.triggerScheduleId);
 
   await db.transaction(async (tx) => {
-    await tx.delete(schedules).where(eq(schedules.id, existing.id));
+    await deleteScheduleById(existing.id, tx);
     await recordAuditEntry({
       actorEmail: email,
       action: "schedule.deactivated",
@@ -150,35 +147,10 @@ export async function deleteUnmanagedSchedule(triggerScheduleId: string) {
   revalidatePath("/admin/schedules");
 }
 
-export type ScheduleRow = {
-  id: string;
-  kind: ScheduleKind;
-  triggerScheduleId: string;
-  cron: string;
-  timezone: string;
-  active: boolean;
-  nextRun: Date | null;
-};
-
 export async function loadScheduleRows(): Promise<
   Partial<Record<ScheduleKind, ScheduleRow>>
 > {
-  const rows = await db.select().from(schedules);
-  const result: Partial<Record<ScheduleKind, ScheduleRow>> = {};
-  for (const row of rows) {
-    if (SCHEDULE_KINDS.includes(row.kind as ScheduleKind)) {
-      result[row.kind as ScheduleKind] = {
-        id: row.id,
-        kind: row.kind as ScheduleKind,
-        triggerScheduleId: row.triggerScheduleId,
-        cron: row.cron,
-        timezone: row.timezone,
-        active: row.active === "true",
-        nextRun: row.nextRun,
-      };
-    }
-  }
-  return result;
+  return loadScheduleRowsFromRepo();
 }
 
 export type UnmanagedSchedule = {
@@ -194,13 +166,7 @@ export async function loadUnmanagedSchedules(): Promise<UnmanagedSchedule[]> {
   const managedDeduplicationKeys = new Set(
     Object.values(SCHEDULE_DEFS).map((d) => d.deduplicationKey),
   );
-  const managedTriggerIds = new Set(
-    (
-      await db
-        .select({ tid: schedules.triggerScheduleId })
-        .from(schedules)
-    ).map((r) => r.tid),
-  );
+  const managedTriggerIds = new Set(await loadManagedTriggerScheduleIds());
 
   const page = await triggerSchedules.list({ perPage: 100 });
 

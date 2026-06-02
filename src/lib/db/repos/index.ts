@@ -7,3 +7,12 @@ export type Repo = typeof db;
 
 export { recordAuditEntry, recordAuditEntries } from "./audit";
 export type { AuditEntryInput } from "./audit";
+export {
+  deleteScheduleById,
+  findScheduleByKind,
+  insertScheduleMirror,
+  loadManagedTriggerScheduleIds,
+  loadScheduleRows,
+  updateScheduleMirror,
+} from "./schedules";
+export type { ScheduleMirrorInput, ScheduleRow } from "./schedules";
