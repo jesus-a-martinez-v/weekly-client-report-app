@@ -16,3 +16,12 @@ export {
   updateScheduleMirror,
 } from "./schedules";
 export type { ScheduleMirrorInput, ScheduleRow } from "./schedules";
+export {
+  createRun,
+  deleteRunById,
+  findRunById,
+  listRuns,
+  updateRunStatus,
+  updateRunTriggerRunId,
+} from "./runs";
+export type { CreateRunInput, UpdateRunStatusOptions } from "./runs";

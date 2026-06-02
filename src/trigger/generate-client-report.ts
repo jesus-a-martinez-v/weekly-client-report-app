@@ -2,8 +2,8 @@ import { task, logger } from "@trigger.dev/sdk/v3";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { clients, projects, reports, runs } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import { clients, projects, reports } from "@/lib/db/schema";
+import { createRun, recordAuditEntry, updateRunStatus } from "@/lib/db/repos";
 import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
   generateEmailDraft,
@@ -44,19 +44,13 @@ async function ensureRun(
   triggerRunId: string,
 ): Promise<string> {
   if (payload.runId) return payload.runId;
-  const [row] = await db
-    .insert(runs)
-    .values({
-      kind: payload.onDemand ? "on_demand" : "weekly",
-      weekLabel: window.weekLabel,
-      windowStart: window.start,
-      windowEnd: window.end,
-      status: "running",
-      triggerRunId,
-      startedAt: sql`now()`,
-    })
-    .returning({ id: runs.id });
-  return row.id;
+  return createRun({
+    kind: payload.onDemand ? "on_demand" : "weekly",
+    weekLabel: window.weekLabel,
+    windowStart: window.start,
+    windowEnd: window.end,
+    triggerRunId,
+  });
 }
 
 export const generateClientReport = task({
@@ -276,10 +270,7 @@ export const generateClientReport = task({
       });
 
       if (ownsRun) {
-        await db
-          .update(runs)
-          .set({ status: "succeeded", finishedAt: sql`now()` })
-          .where(eq(runs.id, runId));
+        await updateRunStatus(runId, "succeeded");
       }
 
       logger.info("Report drafted", {
@@ -316,14 +307,9 @@ export const generateClientReport = task({
         },
       });
       if (ownsRun) {
-        await db
-          .update(runs)
-          .set({
-            status: "failed",
-            finishedAt: sql`now()`,
-            errorMessage: message.slice(0, 2000),
-          })
-          .where(eq(runs.id, runId));
+        await updateRunStatus(runId, "failed", {
+          errorMessage: message.slice(0, 2000),
+        });
       }
       logger.error("Report failed", { clientSlug: client.slug, error: message });
       throw err;

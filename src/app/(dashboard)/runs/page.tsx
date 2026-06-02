@@ -1,8 +1,9 @@
-import { asc, desc, sql } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { db } from "@/lib/db/client";
-import { reports, runs } from "@/lib/db/schema";
+import { reports } from "@/lib/db/schema";
+import { listRuns } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
@@ -22,21 +23,7 @@ function formatClients(names: string[]): { display: string; title?: string } {
 }
 
 export default async function RunsPage() {
-  const allRuns = await db
-    .select({
-      id: runs.id,
-      kind: runs.kind,
-      weekLabel: runs.weekLabel,
-      windowStart: runs.windowStart,
-      windowEnd: runs.windowEnd,
-      status: runs.status,
-      startedAt: runs.startedAt,
-      finishedAt: runs.finishedAt,
-      errorMessage: runs.errorMessage,
-      createdAt: runs.createdAt,
-    })
-    .from(runs)
-    .orderBy(desc(runs.createdAt));
+  const allRuns = await listRuns();
 
   const tallies = await db
     .select({

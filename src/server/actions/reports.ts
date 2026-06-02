@@ -14,8 +14,12 @@ import { generateClientReport } from "@/trigger/generate-client-report";
 import { regenerateReport } from "@/trigger/regenerate-report";
 
 import { db } from "@/lib/db/client";
-import { clients, reports, runs } from "@/lib/db/schema";
-import { recordAuditEntry } from "@/lib/db/repos";
+import { clients, reports } from "@/lib/db/schema";
+import {
+  createRun,
+  recordAuditEntry,
+  updateRunTriggerRunId,
+} from "@/lib/db/repos";
 
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -368,37 +372,29 @@ export async function triggerOnDemandReport(formData: FormData) {
     ? isoWeekToWindow(input.weekLabel)
     : reportingWindow();
 
-  const [runRow] = await db
-    .insert(runs)
-    .values({
-      kind: "on_demand",
-      weekLabel: window.weekLabel,
-      windowStart: window.start,
-      windowEnd: window.end,
-      status: "running",
-      startedAt: sql`now()`,
-    })
-    .returning({ id: runs.id });
+  const runId = await createRun({
+    kind: "on_demand",
+    weekLabel: window.weekLabel,
+    windowStart: window.start,
+    windowEnd: window.end,
+  });
 
   const handle = await generateClientReport.trigger({
     clientId: input.clientId,
     weekLabel: window.weekLabel,
-    runId: runRow.id,
+    runId,
     onDemand: true,
   });
 
-  await db
-    .update(runs)
-    .set({ triggerRunId: handle.id })
-    .where(eq(runs.id, runRow.id));
+  await updateRunTriggerRunId(runId, handle.id);
 
   await recordAuditEntry({
     actorEmail: email,
     action: "report.on_demand_triggered",
     entityType: "client",
     entityId: input.clientId,
-    payload: { clientId: input.clientId, weekLabel: window.weekLabel, runId: runRow.id },
+    payload: { clientId: input.clientId, weekLabel: window.weekLabel, runId },
   });
 
-  redirect(`/runs/${runRow.id}`);
+  redirect(`/runs/${runId}`);
 }
