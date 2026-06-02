@@ -2,8 +2,8 @@ import { asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { db } from "@/db";
-import { reports, runs } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { reports, runs } from "@/lib/db/schema";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatRange } from "@/lib/shared/window";

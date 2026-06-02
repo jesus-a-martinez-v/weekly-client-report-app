@@ -1,7 +1,7 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
 import { and, asc, isNull, lt, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { auditLog, reports } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, reports } from "@/lib/db/schema";
 import { sendDraftedReminderMessage } from "@/lib/telegram";
 
 const SYSTEM_ACTOR = "system";

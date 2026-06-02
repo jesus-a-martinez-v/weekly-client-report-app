@@ -1,8 +1,8 @@
 import { asc } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/db";
-import { clients, projects } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { clients, projects } from "@/lib/db/schema";
 
 import { StatusPill } from "@/components/status-pill";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";

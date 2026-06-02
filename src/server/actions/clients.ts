@@ -7,8 +7,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { parseClientForm, type ProjectInput } from "@/lib/shared/validation/client";
 
-import { db } from "@/db";
-import { auditLog, clients, projects } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, clients, projects } from "@/lib/db/schema";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();

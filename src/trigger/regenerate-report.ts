@@ -1,8 +1,8 @@
 import { task } from "@trigger.dev/sdk/v3";
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/db";
-import { auditLog, clients, reports } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { auditLog, clients, reports } from "@/lib/db/schema";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
 import { renderPdfBuffer } from "@/lib/pdf";
 import { uploadReportPdf } from "@/lib/blob";

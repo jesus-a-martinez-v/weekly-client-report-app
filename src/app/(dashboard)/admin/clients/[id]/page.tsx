@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
-import { db } from "@/db";
-import { clients, projects } from "@/db/schema";
+import { db } from "@/lib/db/client";
+import { clients, projects } from "@/lib/db/schema";
 
 import { ClientForm } from "@/components/client-form";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";
