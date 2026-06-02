@@ -7,7 +7,8 @@ import { auth } from "@/lib/auth";
 import { deleteReportPdfs } from "@/lib/clients/blob";
 import { postN8n } from "@/lib/clients/n8n";
 import { db } from "@/lib/db/client";
-import { auditLog, reports, runs } from "@/lib/db/schema";
+import { reports, runs } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 
 const ACTIONABLE_DRAFT_STATUSES = new Set(["drafted", "quiet"]);
 
@@ -53,7 +54,7 @@ export async function deleteRun(runId: string) {
   await db.transaction(async (tx) => {
     // reports.runId has onDelete: cascade, so child reports are removed too
     await tx.delete(runs).where(eq(runs.id, runId));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "run.delete",
       entityType: "run",
@@ -64,6 +65,7 @@ export async function deleteRun(runId: string) {
         kind: run.kind,
         reportCount: children.length,
       },
+      tx,
     });
   });
 

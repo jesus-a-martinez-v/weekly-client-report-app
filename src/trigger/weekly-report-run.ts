@@ -1,7 +1,8 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { auditLog, clients, runs } from "@/lib/db/schema";
+import { clients, runs } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 import { reportingWindow } from "@/lib/shared/window";
 import { sendDigestMessage } from "@/lib/clients/telegram";
 import { generateClientReport } from "./generate-client-report";
@@ -80,7 +81,7 @@ export const weeklyReportRun = schedules.task({
           errorMessage: errors > 0 ? `${errors} client report(s) failed` : null,
         })
         .where(eq(runs.id, runId));
-      await tx.insert(auditLog).values({
+      await recordAuditEntry({
         actorEmail: SYSTEM_ACTOR,
         action: "run.completed",
         entityType: "run",
@@ -90,6 +91,7 @@ export const weeklyReportRun = schedules.task({
           summary: { drafted, quiet, errors },
           status: finalStatus,
         },
+        tx,
       });
     });
 

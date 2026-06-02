@@ -1,7 +1,8 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
 import { and, asc, isNull, lt, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { auditLog, reports } from "@/lib/db/schema";
+import { reports } from "@/lib/db/schema";
+import { recordAuditEntries } from "@/lib/db/repos";
 import { sendDraftedReminderMessage } from "@/lib/clients/telegram";
 
 const SYSTEM_ACTOR = "system";
@@ -49,11 +50,11 @@ export const draftedReminder = schedules.task({
 
     await sendDraftedReminderMessage(items);
 
-    await db.insert(auditLog).values(
+    await recordAuditEntries(
       items.map((item) => ({
         actorEmail: SYSTEM_ACTOR,
         action: "report.reminded",
-        entityType: "report" as const,
+        entityType: "report",
         entityId: item.reportId,
         payload: {
           hoursOld: item.hoursOld,

@@ -8,7 +8,8 @@ import { auth } from "@/lib/auth";
 import { parseClientForm, type ProjectInput } from "@/lib/shared/validation/client";
 
 import { db } from "@/lib/db/client";
-import { auditLog, clients, projects } from "@/lib/db/schema";
+import { clients, projects } from "@/lib/db/schema";
+import { recordAuditEntry } from "@/lib/db/repos";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
@@ -55,12 +56,13 @@ export async function createClient(formData: FormData) {
       );
     }
 
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "client.create",
       entityType: "client",
       entityId: row.id,
       payload: { slug: input.slug, projectCount: input.projects.length },
+      tx,
     });
 
     return row.id;
@@ -132,12 +134,13 @@ export async function updateClient(id: string, formData: FormData) {
       }
     }
 
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "client.update",
       entityType: "client",
       entityId: id,
       payload: { slug: input.slug, projectCount: input.projects.length },
+      tx,
     });
   });
 
@@ -158,12 +161,13 @@ export async function toggleClientStatus(id: string) {
       .update(clients)
       .set({ status: next, updatedAt: sql`now()` })
       .where(eq(clients.id, id));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "client.toggle",
       entityType: "client",
       entityId: id,
       payload: { from: row.status, to: next },
+      tx,
     });
   });
 
@@ -181,7 +185,7 @@ export async function deleteClient(id: string, typedSlug: string) {
 
   await db.transaction(async (tx) => {
     await tx.delete(clients).where(eq(clients.id, id));
-    await tx.insert(auditLog).values({
+    await recordAuditEntry({
       actorEmail: email,
       action: "client.delete",
       entityType: "client",
@@ -190,6 +194,7 @@ export async function deleteClient(id: string, typedSlug: string) {
         client: snapshot.client,
         projects: snapshot.projects,
       },
+      tx,
     });
   });
 
