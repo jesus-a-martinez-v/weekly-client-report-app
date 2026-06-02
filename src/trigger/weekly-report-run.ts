@@ -1,8 +1,11 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
-import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { clients } from "@/lib/db/schema";
-import { createRun, recordAuditEntry, updateRunStatus } from "@/lib/db/repos";
+import {
+  createRun,
+  listClients,
+  recordAuditEntry,
+  updateRunStatus,
+} from "@/lib/db/repos";
 import { reportingWindow } from "@/lib/shared/window";
 import { sendDigestMessage } from "@/lib/clients/telegram";
 import { generateClientReport } from "./generate-client-report";
@@ -26,10 +29,7 @@ export const weeklyReportRun = schedules.task({
       triggerRunId: ctx.run.id,
     });
 
-    const active = await db
-      .select({ id: clients.id, slug: clients.slug })
-      .from(clients)
-      .where(eq(clients.status, "active"));
+    const active = await listClients({ status: "active" });
 
     if (active.length === 0) {
       logger.warn("No active clients — nothing to fan out");
@@ -42,8 +42,8 @@ export const weeklyReportRun = schedules.task({
     }
 
     const batch = await generateClientReport.batchTriggerAndWait(
-      active.map((c) => ({
-        payload: { clientId: c.id, weekLabel: window.weekLabel, runId },
+      active.map(({ client }) => ({
+        payload: { clientId: client.id, weekLabel: window.weekLabel, runId },
       })),
     );
 

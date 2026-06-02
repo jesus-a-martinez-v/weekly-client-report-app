@@ -1,5 +1,5 @@
-// Barrel for repository modules. Repos (auditRepo, schedulesRepo, runsRepo,
-// clientsRepo, reportsRepo) will be added and re-exported here.
+// Barrel for repository modules. Repos (reportsRepo) will be added and
+// re-exported here.
 import type { db } from "@/lib/db/client";
 
 /** Handle every repo receives by injection. */
@@ -16,6 +16,25 @@ export {
   updateScheduleMirror,
 } from "./schedules";
 export type { ScheduleMirrorInput, ScheduleRow } from "./schedules";
+export {
+  addProject,
+  archiveClient,
+  createClient,
+  deleteClientById,
+  findClientById,
+  findClientBySlug,
+  listClients,
+  removeProject,
+  setClientStatus,
+  setProjects,
+  updateClient,
+} from "./clients";
+export type {
+  ClientInput,
+  ClientListOptions,
+  ClientProjectInput,
+  ClientWithProjects,
+} from "./clients";
 export {
   createRun,
   deleteRunById,
