@@ -3,16 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { auditLog, clients, projects, reports, runs } from "@/lib/db/schema";
-import { fetchClientActivity } from "@/lib/octokit";
+import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
   generateEmailDraft,
   generateNarrative,
   quietWeekNarrative,
-} from "@/lib/openrouter";
+} from "@/lib/clients/openrouter";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
-import { renderPdfBuffer } from "@/lib/pdf";
-import { uploadReportPdf } from "@/lib/blob";
-import { postN8n } from "@/lib/n8n";
+import { renderPdfBuffer } from "@/lib/clients/pdf";
+import { uploadReportPdf } from "@/lib/clients/blob";
+import { postN8n } from "@/lib/clients/n8n";
 import {
   bogotaDateISO,
   formatRange,

@@ -5,11 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { deleteReportPdfs } from "@/lib/blob";
-import { postN8n } from "@/lib/n8n";
+import { deleteReportPdfs } from "@/lib/clients/blob";
+import { postN8n } from "@/lib/clients/n8n";
 import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 import { parseEmailEditForm, parseOnDemandForm } from "@/lib/shared/validation/report";
-import { reviseNarrative } from "@/lib/openrouter";
+import { reviseNarrative } from "@/lib/clients/openrouter";
 import { generateClientReport } from "@/trigger/generate-client-report";
 import { regenerateReport } from "@/trigger/regenerate-report";
 

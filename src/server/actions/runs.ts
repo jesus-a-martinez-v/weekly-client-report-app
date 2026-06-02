@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
-import { deleteReportPdfs } from "@/lib/blob";
-import { postN8n } from "@/lib/n8n";
+import { deleteReportPdfs } from "@/lib/clients/blob";
+import { postN8n } from "@/lib/clients/n8n";
 import { db } from "@/lib/db/client";
 import { auditLog, reports, runs } from "@/lib/db/schema";
 

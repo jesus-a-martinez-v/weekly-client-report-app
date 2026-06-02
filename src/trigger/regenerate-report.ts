@@ -4,10 +4,10 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { auditLog, clients, reports } from "@/lib/db/schema";
 import { renderReportHtml } from "@/lib/shared/pdf-template";
-import { renderPdfBuffer } from "@/lib/pdf";
-import { uploadReportPdf } from "@/lib/blob";
-import { postN8n } from "@/lib/n8n";
-import { generateEmailDraft } from "@/lib/openrouter";
+import { renderPdfBuffer } from "@/lib/clients/pdf";
+import { uploadReportPdf } from "@/lib/clients/blob";
+import { postN8n } from "@/lib/clients/n8n";
+import { generateEmailDraft } from "@/lib/clients/openrouter";
 import { bogotaDateISO, formatRange, reportFilename } from "@/lib/shared/window";
 
 const SYSTEM_ACTOR = "system";
