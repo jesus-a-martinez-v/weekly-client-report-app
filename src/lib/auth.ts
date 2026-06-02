@@ -38,9 +38,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return token;
     },
-    session({ session, token }) {
+    async session({ session, token }) {
       if (token.email) {
-        session.user = { ...session.user, email: token.email as string };
+        const email = token.email as string;
+        session.user = { ...session.user, email };
+        const { setUser } = await import("@sentry/nextjs");
+        setUser({ email });
+      } else {
+        const { setUser } = await import("@sentry/nextjs");
+        setUser(null);
       }
       return session;
     },
