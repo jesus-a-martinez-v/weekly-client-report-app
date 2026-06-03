@@ -14,7 +14,7 @@ import {
   updateNarrative,
   type ReportMutationResult,
 } from "@/lib/services/reports";
-import { reportServiceDeps } from "./report-service-deps";
+import { reportServiceDeps } from "@/lib/services/report-service-deps";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
