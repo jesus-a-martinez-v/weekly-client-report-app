@@ -7,6 +7,13 @@ import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type RunExecutor = typeof db | Transaction;
+type CaptureException = (
+  error: unknown,
+  context: {
+    tags: Record<string, string>;
+    extra?: Record<string, unknown>;
+  },
+) => void;
 
 export type RunTerminalStatus = "succeeded" | "failed" | "partial";
 
@@ -69,6 +76,9 @@ export type RunDeletionDeps = RunLifecycleDeps & {
   };
   blob: {
     deleteReportPdfs(urls: Array<string | null | undefined>): Promise<void>;
+  };
+  sentry?: {
+    captureException: CaptureException;
   };
 };
 
@@ -251,7 +261,19 @@ export async function deleteRun(
           action: "discard",
           draft_id: report.gmailDraftId,
         });
-      } catch {
+      } catch (err) {
+        deps.sentry?.captureException(err, {
+          tags: {
+            area: "runs",
+            reason: "best-effort",
+            operation: "discard-draft-before-delete-run",
+          },
+          extra: {
+            runId,
+            reportId: report.id,
+            draftId: report.gmailDraftId,
+          },
+        });
         // Best-effort: continue even if the draft cannot be reached.
       }
     }
@@ -259,7 +281,18 @@ export async function deleteRun(
 
   try {
     await deps.blob.deleteReportPdfs(children.map((report) => report.pdfBlobUrl));
-  } catch {
+  } catch (err) {
+    deps.sentry?.captureException(err, {
+      tags: {
+        area: "runs",
+        reason: "best-effort",
+        operation: "delete-report-pdfs-before-delete-run",
+      },
+      extra: {
+        runId,
+        reportIds: children.map((report) => report.id),
+      },
+    });
     // Best-effort: still delete the run even if blob cleanup fails.
   }
 

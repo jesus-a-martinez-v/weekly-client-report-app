@@ -1,6 +1,7 @@
 import { deleteReportPdfs } from "@/lib/clients/blob";
 import { postN8n } from "@/lib/clients/n8n";
 import { db } from "@/lib/db/client";
+import * as Sentry from "@sentry/nextjs";
 import {
   createRun,
   deleteRunById,
@@ -37,6 +38,10 @@ export const runServiceDeps: RunDeletionDeps & OnDemandRunDeps = {
   recordAuditEntry,
   n8n: { discardDraft: postN8n },
   blob: { deleteReportPdfs },
+  sentry: {
+    captureException: (error, context) =>
+      Sentry.captureException(error, context),
+  },
   generateClientReport: {
     trigger: (input: OnDemandPayload) => generateClientReport.trigger(input),
   },

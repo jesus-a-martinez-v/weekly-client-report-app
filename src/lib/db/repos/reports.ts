@@ -68,7 +68,7 @@ export type ResetReportForRunInput = {
   clientName: string;
   windowStart: Date;
   windowEnd: Date;
-  triggerRunId: string;
+  triggerRunId: string | null;
 };
 
 export type ReportStatusTally = {

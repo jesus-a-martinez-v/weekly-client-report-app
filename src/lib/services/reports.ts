@@ -16,6 +16,13 @@ import type { EmailEditInput } from "@/lib/shared/validation/report";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ReportExecutor = typeof db | Transaction;
+type CaptureException = (
+  error: unknown,
+  context: {
+    tags: Record<string, string>;
+    extra?: Record<string, unknown>;
+  },
+) => void;
 
 export type ReportMutationResult = {
   reportId: string;
@@ -74,6 +81,9 @@ export type ReportServiceDeps = {
   regenerateReport: {
     trigger(input: { reportId: string }): Promise<unknown>;
   };
+  sentry?: {
+    captureException: CaptureException;
+  };
 };
 
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
@@ -97,6 +107,22 @@ async function requireReport(
   const row = await deps.reportsRepo.findReportById(reportId);
   if (!row) throw new Error("Report not found");
   return row;
+}
+
+function captureBestEffort(
+  deps: ReportServiceDeps,
+  error: unknown,
+  operation: string,
+  extra: Record<string, unknown>,
+): void {
+  deps.sentry?.captureException(error, {
+    tags: {
+      area: "reports",
+      reason: "best-effort",
+      operation,
+    },
+    extra,
+  });
 }
 
 export async function sendReport(
@@ -144,7 +170,11 @@ export async function markReportSent(
         action: "discard",
         draft_id: row.gmailDraftId,
       });
-    } catch {
+    } catch (err) {
+      captureBestEffort(deps, err, "discard-draft-before-manual-sent", {
+        reportId,
+        draftId: row.gmailDraftId,
+      });
       // Best-effort: keep the manual sent transition unblocked.
     }
   }
@@ -333,14 +363,22 @@ export async function deleteReport(
         action: "discard",
         draft_id: row.gmailDraftId,
       });
-    } catch {
+    } catch (err) {
+      captureBestEffort(deps, err, "discard-draft-before-delete-report", {
+        reportId,
+        draftId: row.gmailDraftId,
+      });
       // Best-effort: still delete the row even if the draft cannot be reached.
     }
   }
 
   try {
     await deps.blob.deleteReportPdfs([row.pdfBlobUrl]);
-  } catch {
+  } catch (err) {
+    captureBestEffort(deps, err, "delete-report-pdf-before-delete-report", {
+      reportId,
+      pdfBlobUrl: row.pdfBlobUrl,
+    });
     // Best-effort: still delete the row even if blob cleanup fails.
   }
 

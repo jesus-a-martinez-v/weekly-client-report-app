@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import {
   createContext,
   useCallback,
@@ -47,7 +48,14 @@ export function TriggerProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return;
       const body = (await res.json()) as TokenResponse;
       setState({ token: body.token, expiresAt: body.expiresAt });
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: {
+          area: "trigger",
+          reason: "best-effort",
+          operation: "refresh-public-token",
+        },
+      });
       // Swallow — the next refresh tick will retry. Phase A has no
       // consumers; in later phases the realtime hooks surface errors.
     }
