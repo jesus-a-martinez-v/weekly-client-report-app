@@ -2,10 +2,8 @@ import type {
   DraftPayload,
   DraftResponse,
 } from "@/lib/clients/n8n";
-import type {
-  ClientActivity,
-  FetchClientActivityInput,
-} from "@/lib/clients/octokit";
+import type { FetchClientActivityInput } from "@/lib/clients/octokit";
+import type { ClientActivity } from "@/lib/activity/types";
 import type {
   EmailDraft,
   EmailDraftInput,

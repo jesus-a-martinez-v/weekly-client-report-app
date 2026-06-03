@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ClientActivity } from "./octokit";
+
+import type { ClientActivity } from "@/lib/activity/types";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -104,6 +105,7 @@ export async function generateNarrative(input: NarrativeInput): Promise<string> 
     .replace("{{CONTACT_NAME}}", input.contactName)
     .replace("{{TONE}}", input.tone)
     .replace("{{DATE_RANGE}}", input.dateRange)
+    .replace("{{SOURCE}}", input.activity.source)
     .replace("{{ACTIVITY_JSON}}", JSON.stringify(input.activity, null, 2))
     // Belt-and-braces: the template references CLIENT_NAME a second time in the data section.
     .replace("{{CLIENT_NAME}}", input.clientName);
