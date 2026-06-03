@@ -15,9 +15,12 @@ loadEnv({ path: ".env" });
 
 const YAML_PATH = process.env.SEED_CLIENTS_PATH;
 
+type ClientSource = "github" | "linear";
 type YamlProject = {
   name?: string | null;
   repos: string[];
+  linear_team_key?: string | null;
+  linear_project_id?: string | null;
 };
 type YamlClient = {
   name: string;
@@ -25,14 +28,25 @@ type YamlClient = {
   contact_name: string;
   contact_email: string;
   tone?: string;
+  source?: ClientSource;
+  linear_token_env?: string | null;
   projects: YamlProject[];
 };
 type YamlFile = { clients: YamlClient[] };
+
+function clientSource(yc: YamlClient): ClientSource {
+  const source = yc.source ?? "github";
+  if (source !== "github" && source !== "linear") {
+    throw new Error(`Invalid source '${source}' for client ${yc.slug}`);
+  }
+  return source;
+}
 
 async function main() {
   const { eq, sql } = await import("drizzle-orm");
   const { db } = await import("../src/lib/db/client");
   const { auditLog, clients, projects } = await import("../src/lib/db/schema");
+  const { encryptSecret } = await import("../src/lib/crypto/secret-box");
 
   if (!YAML_PATH) {
     throw new Error("SEED_CLIENTS_PATH is required to run db:seed");
@@ -48,6 +62,23 @@ async function main() {
   await db.transaction(async (tx) => {
     for (const yc of data.clients) {
       const tone = yc.tone ?? "friendly-professional";
+      const source = clientSource(yc);
+      const linearTokenEnv = yc.linear_token_env?.trim();
+      const linearToken =
+        source === "linear" && linearTokenEnv
+          ? process.env[linearTokenEnv]?.trim()
+          : undefined;
+
+      if (source === "linear" && linearTokenEnv && !linearToken) {
+        throw new Error(
+          `Missing or empty env var '${linearTokenEnv}' for Linear client ${yc.slug}`,
+        );
+      }
+
+      const linearTokenEnc = linearToken
+        ? encryptSecret(linearToken)
+        : undefined;
+
       const [row] = await tx
         .insert(clients)
         .values({
@@ -56,6 +87,8 @@ async function main() {
           contactName: yc.contact_name,
           contactEmail: yc.contact_email,
           tone,
+          source,
+          ...(linearTokenEnc !== undefined ? { linearTokenEnc } : {}),
         })
         .onConflictDoUpdate({
           target: clients.slug,
@@ -64,6 +97,8 @@ async function main() {
             contactName: yc.contact_name,
             contactEmail: yc.contact_email,
             tone,
+            source,
+            ...(linearTokenEnc !== undefined ? { linearTokenEnc } : {}),
             updatedAt: sql`now()`,
           },
         })
@@ -77,6 +112,8 @@ async function main() {
             clientId: row.id,
             name: p.name ?? null,
             repos: p.repos,
+            linearTeamKey: p.linear_team_key ?? null,
+            linearProjectId: p.linear_project_id ?? null,
             position: i,
           })),
         );

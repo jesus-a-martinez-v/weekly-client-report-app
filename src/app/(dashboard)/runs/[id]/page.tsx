@@ -5,6 +5,7 @@ import { findRunById, listReportsForRun } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatRange } from "@/lib/shared/window";
+import { reportTotalsDisplay } from "@/lib/shared/report-totals";
 
 export const dynamic = "force-dynamic";
 
@@ -111,32 +112,42 @@ export default async function RunDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {childReports.map((r) => (
-                  <tr key={r.id} className="border-b hairline last:border-b-0">
-                    <td className="px-5 py-3">
-                      <Link
-                        href={`/reports/${r.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {r.clientName}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusPill status={r.status} />
-                    </td>
-                    <td className="px-5 py-3 text-right tabular-nums">{r.totalsPrs}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{r.totalsIssues}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{r.totalsCommits}</td>
-                    <td className="px-5 py-3 text-right text-xs text-zinc-400">
-                      {r.updatedAt.toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                  </tr>
-                ))}
+                {childReports.map((r) => {
+                  const totals = reportTotalsDisplay(r);
+
+                  return (
+                    <tr key={r.id} className="border-b hairline last:border-b-0">
+                      <td className="px-5 py-3">
+                        <Link
+                          href={`/reports/${r.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {r.clientName}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusPill status={r.status} />
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        {totals.prs.tableValue}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        {totals.issues.tableValue}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        {totals.commits.tableValue}
+                      </td>
+                      <td className="px-5 py-3 text-right text-xs text-zinc-400">
+                        {r.updatedAt.toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

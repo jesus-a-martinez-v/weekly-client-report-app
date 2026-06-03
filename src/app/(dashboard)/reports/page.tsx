@@ -5,6 +5,7 @@ import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
 import { deleteReport } from "@/server/actions/reports";
+import { reportTotalsDisplay } from "@/lib/shared/report-totals";
 
 export const dynamic = "force-dynamic";
 
@@ -120,44 +121,54 @@ export default async function ReportsPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b hairline last:border-b-0">
-                  <td className="px-5 py-3">
-                    <Link
-                      href={`/reports/${r.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {r.clientName}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-xs text-zinc-600">
-                    {r.weekLabel}
-                    <span className="ml-1.5 text-zinc-400">
-                      {r.windowStart && r.windowEnd
-                        ? formatRange(r.windowStart, r.windowEnd)
-                        : ""}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusPill status={r.status} />
-                  </td>
-                  <td className="px-5 py-3 text-right tabular-nums">{r.totalsPrs}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">{r.totalsIssues}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">{r.totalsCommits}</td>
-                  <td className="px-5 py-3 text-right text-zinc-500 text-xs">
-                    {r.createdAt.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <DeleteRowButton
-                      action={deleteReport.bind(null, r.id)}
-                      confirmMessage={`Delete the report for ${r.clientName} (${r.weekLabel})? Any live email draft will be discarded.`}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const totals = reportTotalsDisplay(r);
+
+                return (
+                  <tr key={r.id} className="border-b hairline last:border-b-0">
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/reports/${r.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {r.clientName}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-xs text-zinc-600">
+                      {r.weekLabel}
+                      <span className="ml-1.5 text-zinc-400">
+                        {r.windowStart && r.windowEnd
+                          ? formatRange(r.windowStart, r.windowEnd)
+                          : ""}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusPill status={r.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {totals.prs.tableValue}
+                    </td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {totals.issues.tableValue}
+                    </td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {totals.commits.tableValue}
+                    </td>
+                    <td className="px-5 py-3 text-right text-zinc-500 text-xs">
+                      {r.createdAt.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <DeleteRowButton
+                        action={deleteReport.bind(null, r.id)}
+                        confirmMessage={`Delete the report for ${r.clientName} (${r.weekLabel})? Any live email draft will be discarded.`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
