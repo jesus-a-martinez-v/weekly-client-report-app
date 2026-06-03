@@ -11,10 +11,14 @@ import {
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ClientExecutor = typeof db | Transaction;
 
+export type ClientSource = "github" | "linear";
+
 export type ClientProjectInput = {
   id?: string;
   name: string | null;
   repos: string[];
+  linearTeamKey?: string;
+  linearProjectId?: string;
 };
 
 export type ClientInput = {
@@ -23,6 +27,8 @@ export type ClientInput = {
   contactName: string;
   contactEmail: string;
   tone: string;
+  source: ClientSource;
+  linearTokenEnc?: string;
   projects?: ClientProjectInput[];
 };
 
@@ -190,6 +196,8 @@ export async function createClient(
       contactName: input.contactName,
       contactEmail: input.contactEmail,
       tone: input.tone,
+      source: input.source,
+      linearTokenEnc: input.linearTokenEnc ?? null,
     })
     .returning({ id: clients.id });
 
@@ -212,6 +220,10 @@ export async function updateClient(
       contactName: input.contactName,
       contactEmail: input.contactEmail,
       tone: input.tone,
+      source: input.source,
+      ...(input.linearTokenEnc !== undefined
+        ? { linearTokenEnc: input.linearTokenEnc }
+        : {}),
       updatedAt: sql`now()` as unknown as Date,
     })
     .where(eq(clients.id, id));
@@ -254,6 +266,8 @@ export async function addProject(
       clientId,
       name: input.name,
       repos: input.repos,
+      linearTeamKey: input.linearTeamKey ?? null,
+      linearProjectId: input.linearProjectId ?? null,
       position,
     })
     .returning({ id: projects.id });
@@ -309,6 +323,8 @@ export async function setProjects(
         .set({
           name: project.name,
           repos: project.repos,
+          linearTeamKey: project.linearTeamKey ?? null,
+          linearProjectId: project.linearProjectId ?? null,
           position,
         })
         .where(
@@ -320,7 +336,12 @@ export async function setProjects(
     } else {
       await addProject(
         clientId,
-        { name: project.name, repos: project.repos },
+        {
+          name: project.name,
+          repos: project.repos,
+          linearTeamKey: project.linearTeamKey,
+          linearProjectId: project.linearProjectId,
+        },
         position,
         executor,
       );

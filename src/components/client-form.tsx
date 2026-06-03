@@ -4,28 +4,36 @@ import { useState, useTransition } from "react";
 
 import { clientFormSchema } from "@/lib/shared/validation/client";
 
+type ClientSource = "github" | "linear";
+
 type ProjectInput = {
   id?: string;
   name: string;
   repos: string[];
+  linearTeamKey?: string;
+  linearProjectId?: string;
 };
 
 export type ClientFormInitial = {
   id?: string;
+  source: ClientSource;
   name: string;
   slug: string;
   contactName: string;
   contactEmail: string;
   tone: string;
+  hasLinearToken: boolean;
   projects: ProjectInput[];
 };
 
 const empty: ClientFormInitial = {
+  source: "github",
   name: "",
   slug: "",
   contactName: "",
   contactEmail: "",
   tone: "friendly-professional",
+  hasLinearToken: false,
   projects: [{ name: "", repos: [] }],
 };
 
@@ -38,7 +46,9 @@ export function ClientForm({
   submit: (formData: FormData) => Promise<void>;
   submitLabel: string;
 }) {
+  const [source, setSource] = useState<ClientSource>(initial.source);
   const [projects, setProjects] = useState<ProjectInput[]>(initial.projects);
+  const [linearToken, setLinearToken] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
 
@@ -52,6 +62,18 @@ export function ClientForm({
 
   function updateProjectName(idx: number, name: string) {
     setProjects((ps) => ps.map((p, i) => (i === idx ? { ...p, name } : p)));
+  }
+
+  function updateLinearTeamKey(idx: number, linearTeamKey: string) {
+    setProjects((ps) =>
+      ps.map((p, i) => (i === idx ? { ...p, linearTeamKey } : p)),
+    );
+  }
+
+  function updateLinearProjectId(idx: number, linearProjectId: string) {
+    setProjects((ps) =>
+      ps.map((p, i) => (i === idx ? { ...p, linearProjectId } : p)),
+    );
   }
 
   function addRepo(idx: number, raw: string) {
@@ -89,10 +111,14 @@ export function ClientForm({
       contactName: String(fd.get("contactName") ?? ""),
       contactEmail: String(fd.get("contactEmail") ?? ""),
       tone: String(fd.get("tone") || "friendly-professional"),
+      source,
+      linearToken,
       projects: projects.map((p) => ({
         id: p.id,
         name: p.name?.trim() ? p.name.trim() : null,
         repos: p.repos,
+        linearTeamKey: p.linearTeamKey?.trim() || undefined,
+        linearProjectId: p.linearProjectId?.trim() || undefined,
       })),
     };
 
@@ -102,6 +128,8 @@ export function ClientForm({
       return;
     }
 
+    fd.set("source", source);
+    fd.set("linearToken", linearToken);
     fd.set("projects", JSON.stringify(payload.projects));
     startTransition(async () => {
       try {
@@ -167,7 +195,39 @@ export function ClientForm({
             className={fieldClass}
           />
         </Field>
+        <Field label="Source">
+          <select
+            name="source"
+            value={source}
+            onChange={(e) => setSource(e.target.value as ClientSource)}
+            className={fieldClass}
+          >
+            <option value="github">GitHub</option>
+            <option value="linear">Linear</option>
+          </select>
+        </Field>
       </section>
+
+      {source === "linear" && (
+        <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Field label="Linear API token">
+            <input
+              name="linearToken"
+              type="password"
+              autoComplete="off"
+              value={linearToken}
+              onChange={(e) => setLinearToken(e.target.value)}
+              placeholder="•••••• (leave blank to keep current)"
+              className={fieldClass}
+            />
+            {initial.hasLinearToken && linearToken.trim().length === 0 && (
+              <p className="mt-2 text-xs text-zinc-500">
+                Token already set
+              </p>
+            )}
+          </Field>
+        </section>
+      )}
 
       <section>
         <div className="mb-4 flex items-end justify-between">
@@ -193,7 +253,10 @@ export function ClientForm({
             <ProjectBlock
               key={p.id ?? `new-${idx}`}
               project={p}
+              source={source}
               onNameChange={(v) => updateProjectName(idx, v)}
+              onLinearTeamKeyChange={(v) => updateLinearTeamKey(idx, v)}
+              onLinearProjectIdChange={(v) => updateLinearProjectId(idx, v)}
               onAddRepo={(v) => addRepo(idx, v)}
               onRemoveRepo={(j) => removeRepo(idx, j)}
               onRemove={
@@ -219,13 +282,19 @@ export function ClientForm({
 
 function ProjectBlock({
   project,
+  source,
   onNameChange,
+  onLinearTeamKeyChange,
+  onLinearProjectIdChange,
   onAddRepo,
   onRemoveRepo,
   onRemove,
 }: {
   project: ProjectInput;
+  source: ClientSource;
   onNameChange: (v: string) => void;
+  onLinearTeamKeyChange: (v: string) => void;
+  onLinearProjectIdChange: (v: string) => void;
   onAddRepo: (v: string) => void;
   onRemoveRepo: (idx: number) => void;
   onRemove?: () => void;
@@ -263,54 +332,81 @@ function ProjectBlock({
         )}
       </div>
 
-      <div className="mt-4">
-        <label className="text-xs uppercase tracking-[0.14em] text-zinc-500">
-          Repos
-        </label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {project.repos.map((repo, j) => (
-            <span
-              key={`${repo}-${j}`}
-              className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700"
-            >
-              <span className="font-mono">{repo}</span>
+      {source === "github" ? (
+        <div className="mt-4">
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-500">
+            Repos
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {project.repos.map((repo, j) => (
+              <span
+                key={`${repo}-${j}`}
+                className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700"
+              >
+                <span className="font-mono">{repo}</span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveRepo(j)}
+                  className="text-zinc-400 hover:text-red-600"
+                  aria-label={`Remove ${repo}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <div className="flex items-center gap-2">
+              <input
+                value={repoDraft}
+                onChange={(e) => setRepoDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    commit();
+                  }
+                }}
+                placeholder="Owner/repo"
+                className="w-44 rounded-md border border-zinc-200 px-2 py-1 text-xs font-mono"
+              />
               <button
                 type="button"
-                onClick={() => onRemoveRepo(j)}
-                className="text-zinc-400 hover:text-red-600"
-                aria-label={`Remove ${repo}`}
+                onClick={commit}
+                className="text-xs text-zinc-500 hover:text-zinc-900"
               >
-                ×
+                + Add
               </button>
-            </span>
-          ))}
-          <div className="flex items-center gap-2">
-            <input
-              value={repoDraft}
-              onChange={(e) => setRepoDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  commit();
-                }
-              }}
-              placeholder="Owner/repo"
-              className="w-44 rounded-md border border-zinc-200 px-2 py-1 text-xs font-mono"
-            />
-            <button
-              type="button"
-              onClick={commit}
-              className="text-xs text-zinc-500 hover:text-zinc-900"
-            >
-              + Add
-            </button>
+            </div>
           </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            Format: <span className="font-mono">Owner/repo</span>. Commas or
+            Enter to add multiple.
+          </p>
         </div>
-        <p className="mt-2 text-xs text-zinc-400">
-          Format: <span className="font-mono">Owner/repo</span>. Commas or
-          Enter to add multiple.
-        </p>
-      </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-500">
+              Linear team key
+            </span>
+            <input
+              value={project.linearTeamKey ?? ""}
+              onChange={(e) => onLinearTeamKeyChange(e.target.value)}
+              placeholder="ENG"
+              className={`${fieldClass} mt-1 font-mono`}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-500">
+              Linear project ID
+            </span>
+            <input
+              value={project.linearProjectId ?? ""}
+              onChange={(e) => onLinearProjectIdChange(e.target.value)}
+              placeholder="Optional project UUID"
+              className={`${fieldClass} mt-1 font-mono`}
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }

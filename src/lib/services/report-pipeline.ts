@@ -3,7 +3,9 @@ import type {
   DraftResponse,
 } from "@/lib/clients/n8n";
 import type { FetchClientActivityInput } from "@/lib/clients/octokit";
-import type { ClientActivity } from "@/lib/activity/types";
+import type { FetchLinearActivityInput } from "@/lib/clients/linear";
+import { decryptSecret } from "@/lib/crypto/secret-box";
+import { isQuietActivity, type ClientActivity } from "@/lib/activity/types";
 import type {
   EmailDraft,
   EmailDraftInput,
@@ -16,7 +18,7 @@ import type {
 import type { db } from "@/lib/db/client";
 import type {
   AuditEntryInput,
-  ClientWithProjects,
+  ClientWithLinearTokenAndProjects,
   CreateReportInput,
   ResetReportForRunInput,
   UpdateReportActivityInput,
@@ -77,7 +79,7 @@ export type ReportPipelineDeps = {
     findClientById(
       id: string,
       executor?: PipelineExecutor,
-    ): Promise<ClientWithProjects | null>;
+    ): Promise<ClientWithLinearTokenAndProjects | null>;
   };
   reportsRepo: {
     findReportByClientWeek(
@@ -135,6 +137,9 @@ export type ReportPipelineDeps = {
     fetchClientActivity(
       input: FetchClientActivityInput,
     ): Promise<ClientActivity>;
+    fetchLinearActivity(
+      input: FetchLinearActivityInput,
+    ): Promise<ClientActivity>;
   };
   openRouter: {
     generateNarrative(input: NarrativeInput): Promise<string>;
@@ -163,6 +168,80 @@ function log(
   properties?: Record<string, unknown>,
 ): void {
   context.logger?.[level]?.(message, properties);
+}
+
+type ClientIdentityInput = FetchClientActivityInput["client"];
+
+function clientIdentity(
+  client: ClientWithLinearTokenAndProjects["client"],
+): ClientIdentityInput {
+  return {
+    name: client.name,
+    slug: client.slug,
+    contact_name: client.contactName,
+    contact_email: client.contactEmail,
+    tone: client.tone,
+  };
+}
+
+function linearProjects(
+  clientSlug: string,
+  projects: ClientWithLinearTokenAndProjects["projects"],
+): FetchLinearActivityInput["projects"] {
+  return projects.map((project) => {
+    const teamKey = project.linearTeamKey?.trim();
+    if (!teamKey) {
+      throw new Error(
+        `Client ${clientSlug} is Linear-sourced but project ${project.name ?? project.id} has no Linear team key configured.`,
+      );
+    }
+
+    return {
+      name: project.name,
+      teamKey,
+      projectId: project.linearProjectId ?? undefined,
+    };
+  });
+}
+
+async function fetchActivity(input: {
+  client: ClientWithLinearTokenAndProjects["client"];
+  projects: ClientWithLinearTokenAndProjects["projects"];
+  window: ReportingWindow;
+  dateRange: string;
+  deps: ReportPipelineDeps;
+}): Promise<ClientActivity> {
+  const identity = clientIdentity(input.client);
+  const window = {
+    start: input.window.start,
+    end: input.window.end,
+    label: input.dateRange,
+  };
+
+  if (input.client.source === "linear") {
+    if (!input.client.linearTokenEnc) {
+      throw new Error(
+        `Client ${input.client.slug} is Linear-sourced but has no Linear token configured. ` +
+          "Set the token in the admin panel before triggering a report.",
+      );
+    }
+
+    return input.deps.activity.fetchLinearActivity({
+      client: identity,
+      projects: linearProjects(input.client.slug, input.projects),
+      window,
+      token: decryptSecret(input.client.linearTokenEnc),
+    });
+  }
+
+  return input.deps.activity.fetchClientActivity({
+    client: identity,
+    projects: input.projects.map((project) => ({
+      name: project.name,
+      repos: project.repos,
+    })),
+    window,
+  });
 }
 
 async function ensureRun(
@@ -242,25 +321,15 @@ export async function generateReportForClient(
   }
 
   try {
-    const activity = await deps.activity.fetchClientActivity({
-      client: {
-        name: client.name,
-        slug: client.slug,
-        contact_name: client.contactName,
-        contact_email: client.contactEmail,
-        tone: client.tone,
-      },
-      projects: projectRows.map((project) => ({
-        name: project.name,
-        repos: project.repos,
-      })),
-      window: { start: window.start, end: window.end, label: dateRange },
+    const activity = await fetchActivity({
+      client,
+      projects: projectRows,
+      window,
+      dateRange,
+      deps,
     });
 
-    const isQuiet =
-      activity.totals.prs === 0 &&
-      activity.totals.issues === 0 &&
-      activity.totals.commits === 0;
+    const isQuiet = isQuietActivity(activity);
 
     await deps.reportsRepo.updateReportActivity(reportId, {
       activityJson: activity,

@@ -6,8 +6,10 @@ import type {
   ClientInput,
   ClientListOptions,
   ClientProjectInput,
+  ClientWithLinearTokenAndProjects,
   ClientWithProjects,
 } from "@/lib/db/repos";
+import { encryptSecret } from "@/lib/crypto/secret-box";
 import {
   parseClientForm,
   type ClientFormInput,
@@ -36,6 +38,10 @@ export type ClientRepository = {
     id: string,
     executor?: ClientExecutor,
   ): Promise<ClientWithProjects | null>;
+  findClientByIdWithLinearToken(
+    id: string,
+    executor?: ClientExecutor,
+  ): Promise<ClientWithLinearTokenAndProjects | null>;
   findClientBySlug(
     slug: string,
     executor?: ClientExecutor,
@@ -116,13 +122,24 @@ async function ensureSlugAvailable(
   return ok(null);
 }
 
-function clientInputFromForm(input: ClientFormInput): ClientInput {
+function encryptedLinearToken(input: ClientFormInput): string | undefined {
+  const token = input.linearToken?.trim();
+  if (!token) return undefined;
+  return encryptSecret(token);
+}
+
+function clientInputFromForm(
+  input: ClientFormInput,
+  linearTokenEnc?: string,
+): ClientInput {
   return {
     name: input.name,
     slug: input.slug,
     contactName: input.contactName,
     contactEmail: input.contactEmail,
     tone: input.tone,
+    source: input.source,
+    linearTokenEnc,
     projects: input.projects,
   };
 }
@@ -145,9 +162,14 @@ export async function createClient(
   const slugCheck = await ensureSlugAvailable(parsed.value.slug, undefined, deps);
   if (!slugCheck.ok) return slugCheck;
 
+  const linearTokenEnc =
+    parsed.value.source === "linear"
+      ? encryptedLinearToken(parsed.value)
+      : undefined;
+
   const clientId = await deps.transaction(async (tx) => {
     const newId = await deps.repo.createClient(
-      clientInputFromForm(parsed.value),
+      clientInputFromForm(parsed.value, linearTokenEnc),
       tx,
     );
     await deps.recordAuditEntry({
@@ -157,6 +179,8 @@ export async function createClient(
       entityId: newId,
       payload: {
         slug: parsed.value.slug,
+        source: parsed.value.source,
+        hasLinearToken: !!linearTokenEnc,
         projectCount: parsed.value.projects.length,
       },
       tx,
@@ -176,11 +200,13 @@ export async function updateClient(
   const parsed = parseClientInput(formData);
   if (!parsed.ok) return parsed;
 
-  const existing = await deps.repo.findClientById(id);
+  const existing = await deps.repo.findClientByIdWithLinearToken(id);
   if (!existing) return err("not_found", "Client not found");
 
   const slugCheck = await ensureSlugAvailable(parsed.value.slug, id, deps);
   if (!slugCheck.ok) return slugCheck;
+
+  const linearTokenEnc = encryptedLinearToken(parsed.value);
 
   await deps.transaction(async (tx) => {
     await deps.repo.updateClient(
@@ -191,6 +217,8 @@ export async function updateClient(
         contactName: parsed.value.contactName,
         contactEmail: parsed.value.contactEmail,
         tone: parsed.value.tone,
+        source: parsed.value.source,
+        linearTokenEnc,
       },
       tx,
     );
@@ -202,6 +230,8 @@ export async function updateClient(
       entityId: id,
       payload: {
         slug: parsed.value.slug,
+        source: parsed.value.source,
+        hasLinearToken: !!linearTokenEnc || !!existing.client.linearTokenEnc,
         projectCount: parsed.value.projects.length,
       },
       tx,

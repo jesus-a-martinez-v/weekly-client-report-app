@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { findClientById } from "@/lib/db/repos";
+import { findClientByIdWithLinearToken } from "@/lib/db/repos";
 
-import { ClientForm } from "@/components/client-form";
+import { ClientForm, type ClientFormInitial } from "@/components/client-form";
 import { DeleteClientDialog } from "@/components/delete-client-dialog";
 import { StatusPill } from "@/components/status-pill";
 import { ToggleStatusForm } from "../toggle-status-form";
@@ -17,20 +17,24 @@ export default async function EditClientPage({
 }): Promise<JSX.Element> {
   const { id } = await params;
 
-  const row = await findClientById(id);
+  const row = await findClientByIdWithLinearToken(id);
   if (!row) notFound();
 
-  const initial = {
+  const initial: ClientFormInitial = {
     id: row.client.id,
+    source: row.client.source === "linear" ? "linear" : "github",
     name: row.client.name,
     slug: row.client.slug,
     contactName: row.client.contactName,
     contactEmail: row.client.contactEmail,
     tone: row.client.tone,
+    hasLinearToken: !!row.client.linearTokenEnc,
     projects: row.projects.map((project) => ({
       id: project.id,
       name: project.name ?? "",
       repos: project.repos,
+      linearTeamKey: project.linearTeamKey ?? undefined,
+      linearProjectId: project.linearProjectId ?? undefined,
     })),
   };
 
