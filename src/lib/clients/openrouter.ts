@@ -163,10 +163,16 @@ export async function generateEmailDraft(input: EmailDraftInput): Promise<EmailD
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (parseErr) {
     // Fallback: strip code fences if the model wrapped JSON in them despite json mode.
     const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    parsed = JSON.parse(stripped);
+    try {
+      parsed = JSON.parse(stripped);
+    } catch (fallbackErr) {
+      throw new Error("OpenRouter email-draft response was not valid JSON", {
+        cause: fallbackErr instanceof Error ? fallbackErr : parseErr,
+      });
+    }
   }
   const obj = parsed as { subject?: unknown; body?: unknown };
   if (typeof obj.subject !== "string" || typeof obj.body !== "string") {

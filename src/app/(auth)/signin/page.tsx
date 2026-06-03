@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -25,7 +26,14 @@ export default function SignInPage() {
         return;
       }
       setError("Invalid email or password.");
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: {
+          area: "auth",
+          operation: "sign-in",
+          reason: "ui-error",
+        },
+      });
       setError("Invalid email or password.");
     } finally {
       setLoading(false);

@@ -1,4 +1,5 @@
 import { task } from "@trigger.dev/sdk/v3";
+import * as Sentry from "@sentry/node";
 
 import {
   findClientById,
@@ -62,7 +63,15 @@ export const regenerateReport = task({
     if (oldDraftId) {
       try {
         await postN8n({ action: "discard", draft_id: oldDraftId });
-      } catch {
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: {
+            area: "reports",
+            reason: "best-effort",
+            operation: "discard-draft-before-regenerate-report",
+          },
+          extra: { reportId, oldDraftId },
+        });
         // best-effort: don't block regeneration if the old draft can't be reached
       }
     }

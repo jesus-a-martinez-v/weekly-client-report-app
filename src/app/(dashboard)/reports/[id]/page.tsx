@@ -1,11 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
 
-import { db } from "@/lib/db/client";
-import { auditLog } from "@/lib/db/schema";
-import { findReportById } from "@/lib/db/repos";
+import { findReportById, listAuditEntriesForEntity } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
@@ -30,19 +27,7 @@ export default async function ReportDetailPage({
 
   if (!row) notFound();
 
-  const auditRows = await db
-    .select({
-      id: auditLog.id,
-      actorEmail: auditLog.actorEmail,
-      action: auditLog.action,
-      payload: auditLog.payload,
-      createdAt: auditLog.createdAt,
-    })
-    .from(auditLog)
-    .where(
-      and(eq(auditLog.entityType, "report"), eq(auditLog.entityId, id)),
-    )
-    .orderBy(desc(auditLog.createdAt));
+  const auditRows = await listAuditEntriesForEntity("report", id);
 
   const isInflight = IN_FLIGHT.has(row.status);
   const isActionable = ACTIONABLE.has(row.status);

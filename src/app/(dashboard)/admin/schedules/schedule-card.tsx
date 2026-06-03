@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useState, useTransition } from "react";
 import { StatusPill } from "@/components/status-pill";
 import { upsertSchedule, deleteSchedule } from "@/server/actions/schedules";
@@ -54,7 +55,15 @@ function formatNextRun(date: Date | null, timezone: string): string {
       minute: "2-digit",
       timeZoneName: "short",
     }).format(date);
-  } catch {
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: {
+        area: "schedules",
+        operation: "format-next-run",
+        reason: "format-fallback",
+      },
+      extra: { timezone },
+    });
     return date.toISOString();
   }
 }

@@ -1,9 +1,6 @@
-import { asc } from "drizzle-orm";
 import Link from "next/link";
 
-import { db } from "@/lib/db/client";
-import { clients } from "@/lib/db/schema";
-import { listReports } from "@/lib/db/repos";
+import { listClients, listReports } from "@/lib/db/repos";
 import { StatusPill } from "@/components/status-pill";
 import { DeleteRowButton } from "@/components/delete-row-button";
 import { formatRange } from "@/lib/shared/window";
@@ -18,10 +15,10 @@ export default async function ReportsPage({
 }) {
   const params = await searchParams;
 
-  const allClients = await db
-    .select({ id: clients.id, name: clients.name })
-    .from(clients)
-    .orderBy(asc(clients.name));
+  const allClients = (await listClients()).map(({ client }) => ({
+    id: client.id,
+    name: client.name,
+  }));
 
   const rows = await listReports({
     clientId: params.clientId,

@@ -2,6 +2,7 @@ import { deleteReportPdfs } from "@/lib/clients/blob";
 import { postN8n } from "@/lib/clients/n8n";
 import { reviseNarrative as reviseNarrativeWithAi } from "@/lib/clients/openrouter";
 import { db } from "@/lib/db/client";
+import * as Sentry from "@sentry/nextjs";
 import {
   deleteReport as deleteReportRecord,
   findClientById,
@@ -39,5 +40,9 @@ export const reportServiceDeps: ReportServiceDeps = {
   regenerateReport: {
     trigger: (input: { reportId: string }) =>
       regenerateReportTask.trigger(input),
+  },
+  sentry: {
+    captureException: (error, context) =>
+      Sentry.captureException(error, context),
   },
 };

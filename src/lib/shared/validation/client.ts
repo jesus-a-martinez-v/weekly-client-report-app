@@ -43,8 +43,8 @@ export function parseClientForm(formData: FormData): ClientFormInput {
   if (typeof projectsRaw === "string" && projectsRaw.length > 0) {
     try {
       projects = JSON.parse(projectsRaw);
-    } catch {
-      throw new Error("Could not parse projects payload");
+    } catch (err) {
+      throw new Error("Could not parse projects payload", { cause: err });
     }
   }
 

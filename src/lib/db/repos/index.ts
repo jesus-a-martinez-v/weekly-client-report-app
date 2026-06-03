@@ -4,8 +4,12 @@ import type { db } from "@/lib/db/client";
 /** Handle every repo receives by injection. */
 export type Repo = typeof db;
 
-export { recordAuditEntry, recordAuditEntries } from "./audit";
-export type { AuditEntryInput } from "./audit";
+export {
+  listAuditEntriesForEntity,
+  recordAuditEntry,
+  recordAuditEntries,
+} from "./audit";
+export type { AuditEntryInput, AuditTimelineEntry } from "./audit";
 export {
   deleteScheduleById,
   findScheduleByKind,
@@ -67,6 +71,7 @@ export type {
   ReportClientForRun,
   ReportListOptions,
   ReportStatusTally,
+  ResetReportForRunInput,
   StaleDraftReport,
   UpdateReportActivityInput,
   UpdateReportEmailInput,
