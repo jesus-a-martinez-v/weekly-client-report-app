@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@auth/core": "0.37.4",
+    "@linear/sdk": "^86.0.0",
     "@octokit/rest": "^22.0.1",
     "@sentry/nextjs": "^10.54.0",
     "@sentry/node": "^10.55.0",

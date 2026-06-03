@@ -31,8 +31,33 @@ export type ClientListOptions = {
 };
 
 export type ClientWithProjects = {
+  client: ClientWithoutLinearToken;
+  projects: Project[];
+};
+
+export type ClientWithLinearTokenAndProjects = {
   client: Client;
   projects: Project[];
+};
+
+export type ClientWithoutLinearToken = Omit<Client, "linearTokenEnc">;
+
+const clientColumnsWithoutLinearToken = {
+  id: clients.id,
+  name: clients.name,
+  slug: clients.slug,
+  contactName: clients.contactName,
+  contactEmail: clients.contactEmail,
+  tone: clients.tone,
+  status: clients.status,
+  source: clients.source,
+  createdAt: clients.createdAt,
+  updatedAt: clients.updatedAt,
+};
+
+const clientColumnsWithLinearToken = {
+  ...clientColumnsWithoutLinearToken,
+  linearTokenEnc: clients.linearTokenEnc,
 };
 
 async function listProjectsForClients(
@@ -49,9 +74,26 @@ async function listProjectsForClients(
 }
 
 function attachProjects(
-  clientRows: Client[],
+  clientRows: ClientWithoutLinearToken[],
   projectRows: Project[],
 ): ClientWithProjects[] {
+  const projectsByClient = new Map<string, Project[]>();
+  for (const project of projectRows) {
+    const existing = projectsByClient.get(project.clientId) ?? [];
+    existing.push(project);
+    projectsByClient.set(project.clientId, existing);
+  }
+
+  return clientRows.map((client) => ({
+    client,
+    projects: projectsByClient.get(client.id) ?? [],
+  }));
+}
+
+function attachProjectsWithLinearToken(
+  clientRows: Client[],
+  projectRows: Project[],
+): ClientWithLinearTokenAndProjects[] {
   const projectsByClient = new Map<string, Project[]>();
   for (const project of projectRows) {
     const existing = projectsByClient.get(project.clientId) ?? [];
@@ -71,11 +113,14 @@ export async function listClients(
 ): Promise<ClientWithProjects[]> {
   const clientRows = options.status
     ? await executor
-        .select()
+        .select(clientColumnsWithoutLinearToken)
         .from(clients)
         .where(eq(clients.status, options.status))
         .orderBy(asc(clients.name))
-    : await executor.select().from(clients).orderBy(asc(clients.name));
+    : await executor
+        .select(clientColumnsWithoutLinearToken)
+        .from(clients)
+        .orderBy(asc(clients.name));
 
   const projectRows = await listProjectsForClients(
     clientRows.map((client) => client.id),
@@ -90,7 +135,7 @@ export async function findClientById(
   executor: ClientExecutor = db,
 ): Promise<ClientWithProjects | null> {
   const [client] = await executor
-    .select()
+    .select(clientColumnsWithoutLinearToken)
     .from(clients)
     .where(eq(clients.id, id))
     .limit(1);
@@ -101,12 +146,28 @@ export async function findClientById(
   return { client, projects: projectRows };
 }
 
+export async function findClientByIdWithLinearToken(
+  id: string,
+  executor: ClientExecutor = db,
+): Promise<ClientWithLinearTokenAndProjects | null> {
+  const [client] = await executor
+    .select(clientColumnsWithLinearToken)
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+
+  if (!client) return null;
+
+  const projectRows = await listProjectsForClients([client.id], executor);
+  return attachProjectsWithLinearToken([client], projectRows)[0] ?? null;
+}
+
 export async function findClientBySlug(
   slug: string,
   executor: ClientExecutor = db,
 ): Promise<ClientWithProjects | null> {
   const [client] = await executor
-    .select()
+    .select(clientColumnsWithoutLinearToken)
     .from(clients)
     .where(eq(clients.slug, slug))
     .limit(1);

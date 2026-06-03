@@ -25,6 +25,7 @@ export {
   createClient,
   deleteClientById,
   findClientById,
+  findClientByIdWithLinearToken,
   findClientBySlug,
   listClients,
   removeProject,
@@ -36,7 +37,9 @@ export type {
   ClientInput,
   ClientListOptions,
   ClientProjectInput,
+  ClientWithLinearTokenAndProjects,
   ClientWithProjects,
+  ClientWithoutLinearToken,
 } from "./clients";
 export {
   createRun,
