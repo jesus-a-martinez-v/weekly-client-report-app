@@ -27,6 +27,8 @@ export const clients = pgTable(
       .notNull()
       .default("friendly-professional"),
     status: varchar("status", { length: 16 }).notNull().default("active"),
+    source: varchar("source", { length: 16 }).notNull().default("github"),
+    linearTokenEnc: text("linear_token_enc"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -51,6 +53,8 @@ export const projects = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    linearTeamKey: varchar("linear_team_key", { length: 20 }),
+    linearProjectId: varchar("linear_project_id", { length: 64 }),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

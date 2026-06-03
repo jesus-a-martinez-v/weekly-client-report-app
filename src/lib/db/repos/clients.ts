@@ -11,10 +11,14 @@ import {
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ClientExecutor = typeof db | Transaction;
 
+export type ClientSource = "github" | "linear";
+
 export type ClientProjectInput = {
   id?: string;
   name: string | null;
   repos: string[];
+  linearTeamKey?: string;
+  linearProjectId?: string;
 };
 
 export type ClientInput = {
@@ -23,6 +27,8 @@ export type ClientInput = {
   contactName: string;
   contactEmail: string;
   tone: string;
+  source: ClientSource;
+  linearTokenEnc?: string;
   projects?: ClientProjectInput[];
 };
 
@@ -31,8 +37,33 @@ export type ClientListOptions = {
 };
 
 export type ClientWithProjects = {
+  client: ClientWithoutLinearToken;
+  projects: Project[];
+};
+
+export type ClientWithLinearTokenAndProjects = {
   client: Client;
   projects: Project[];
+};
+
+export type ClientWithoutLinearToken = Omit<Client, "linearTokenEnc">;
+
+const clientColumnsWithoutLinearToken = {
+  id: clients.id,
+  name: clients.name,
+  slug: clients.slug,
+  contactName: clients.contactName,
+  contactEmail: clients.contactEmail,
+  tone: clients.tone,
+  status: clients.status,
+  source: clients.source,
+  createdAt: clients.createdAt,
+  updatedAt: clients.updatedAt,
+};
+
+const clientColumnsWithLinearToken = {
+  ...clientColumnsWithoutLinearToken,
+  linearTokenEnc: clients.linearTokenEnc,
 };
 
 async function listProjectsForClients(
@@ -49,9 +80,26 @@ async function listProjectsForClients(
 }
 
 function attachProjects(
-  clientRows: Client[],
+  clientRows: ClientWithoutLinearToken[],
   projectRows: Project[],
 ): ClientWithProjects[] {
+  const projectsByClient = new Map<string, Project[]>();
+  for (const project of projectRows) {
+    const existing = projectsByClient.get(project.clientId) ?? [];
+    existing.push(project);
+    projectsByClient.set(project.clientId, existing);
+  }
+
+  return clientRows.map((client) => ({
+    client,
+    projects: projectsByClient.get(client.id) ?? [],
+  }));
+}
+
+function attachProjectsWithLinearToken(
+  clientRows: Client[],
+  projectRows: Project[],
+): ClientWithLinearTokenAndProjects[] {
   const projectsByClient = new Map<string, Project[]>();
   for (const project of projectRows) {
     const existing = projectsByClient.get(project.clientId) ?? [];
@@ -71,11 +119,14 @@ export async function listClients(
 ): Promise<ClientWithProjects[]> {
   const clientRows = options.status
     ? await executor
-        .select()
+        .select(clientColumnsWithoutLinearToken)
         .from(clients)
         .where(eq(clients.status, options.status))
         .orderBy(asc(clients.name))
-    : await executor.select().from(clients).orderBy(asc(clients.name));
+    : await executor
+        .select(clientColumnsWithoutLinearToken)
+        .from(clients)
+        .orderBy(asc(clients.name));
 
   const projectRows = await listProjectsForClients(
     clientRows.map((client) => client.id),
@@ -90,7 +141,7 @@ export async function findClientById(
   executor: ClientExecutor = db,
 ): Promise<ClientWithProjects | null> {
   const [client] = await executor
-    .select()
+    .select(clientColumnsWithoutLinearToken)
     .from(clients)
     .where(eq(clients.id, id))
     .limit(1);
@@ -101,12 +152,28 @@ export async function findClientById(
   return { client, projects: projectRows };
 }
 
+export async function findClientByIdWithLinearToken(
+  id: string,
+  executor: ClientExecutor = db,
+): Promise<ClientWithLinearTokenAndProjects | null> {
+  const [client] = await executor
+    .select(clientColumnsWithLinearToken)
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+
+  if (!client) return null;
+
+  const projectRows = await listProjectsForClients([client.id], executor);
+  return attachProjectsWithLinearToken([client], projectRows)[0] ?? null;
+}
+
 export async function findClientBySlug(
   slug: string,
   executor: ClientExecutor = db,
 ): Promise<ClientWithProjects | null> {
   const [client] = await executor
-    .select()
+    .select(clientColumnsWithoutLinearToken)
     .from(clients)
     .where(eq(clients.slug, slug))
     .limit(1);
@@ -129,6 +196,8 @@ export async function createClient(
       contactName: input.contactName,
       contactEmail: input.contactEmail,
       tone: input.tone,
+      source: input.source,
+      linearTokenEnc: input.linearTokenEnc ?? null,
     })
     .returning({ id: clients.id });
 
@@ -151,6 +220,10 @@ export async function updateClient(
       contactName: input.contactName,
       contactEmail: input.contactEmail,
       tone: input.tone,
+      source: input.source,
+      ...(input.linearTokenEnc !== undefined
+        ? { linearTokenEnc: input.linearTokenEnc }
+        : {}),
       updatedAt: sql`now()` as unknown as Date,
     })
     .where(eq(clients.id, id));
@@ -193,6 +266,8 @@ export async function addProject(
       clientId,
       name: input.name,
       repos: input.repos,
+      linearTeamKey: input.linearTeamKey ?? null,
+      linearProjectId: input.linearProjectId ?? null,
       position,
     })
     .returning({ id: projects.id });
@@ -248,6 +323,8 @@ export async function setProjects(
         .set({
           name: project.name,
           repos: project.repos,
+          linearTeamKey: project.linearTeamKey ?? null,
+          linearProjectId: project.linearProjectId ?? null,
           position,
         })
         .where(
@@ -259,7 +336,12 @@ export async function setProjects(
     } else {
       await addProject(
         clientId,
-        { name: project.name, repos: project.repos },
+        {
+          name: project.name,
+          repos: project.repos,
+          linearTeamKey: project.linearTeamKey,
+          linearProjectId: project.linearProjectId,
+        },
         position,
         executor,
       );

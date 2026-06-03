@@ -36,7 +36,7 @@ if xargs -a "$tracked_files" rg -n --hidden --glob '!package-lock.json' "$email_
   fail=1
 fi
 
-secret_regex='(sk-[A-Za-z0-9_-]{20,}|sk-or-v1-[A-Za-z0-9_-]{10,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|tr_(prod|dev)_[A-Za-z0-9_-]{10,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})'
+secret_regex='(sk-[A-Za-z0-9_-]{20,}|sk-or-v1-[A-Za-z0-9_-]{10,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|lin_api_[A-Za-z0-9]{20,}|tr_(prod|dev)_[A-Za-z0-9_-]{10,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})'
 if xargs -a "$tracked_files" rg -n --hidden --glob '!package-lock.json' "$secret_regex"; then
   echo "[audit-public] secret-shaped token found" >&2
   fail=1

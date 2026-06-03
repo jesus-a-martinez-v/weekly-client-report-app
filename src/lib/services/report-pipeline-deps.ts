@@ -1,4 +1,5 @@
 import { uploadReportPdf } from "@/lib/clients/blob";
+import { fetchLinearActivity } from "@/lib/clients/linear";
 import { postN8n } from "@/lib/clients/n8n";
 import { fetchClientActivity } from "@/lib/clients/octokit";
 import {
@@ -11,7 +12,7 @@ import { db } from "@/lib/db/client";
 import {
   createReport,
   createRun,
-  findClientById,
+  findClientByIdWithLinearToken,
   findReportByClientWeek,
   recordAuditEntry,
   resetReportForRun,
@@ -42,7 +43,7 @@ const runLifecycle = {
 } satisfies RunLifecycleDeps;
 
 export const reportPipelineDeps: ReportPipelineDeps = {
-  clientsRepo: { findClientById },
+  clientsRepo: { findClientById: findClientByIdWithLinearToken },
   reportsRepo: {
     createReport,
     findReportByClientWeek,
@@ -58,7 +59,7 @@ export const reportPipelineDeps: ReportPipelineDeps = {
   transaction: <T>(callback: TransactionCallback<T>): Promise<T> =>
     db.transaction(callback),
   recordAuditEntry,
-  activity: { fetchClientActivity },
+  activity: { fetchClientActivity, fetchLinearActivity },
   openRouter: {
     generateEmailDraft,
     generateNarrative,
