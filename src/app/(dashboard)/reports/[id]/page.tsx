@@ -8,8 +8,13 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { EmailEditor } from "./email-editor";
 import { NarrativeEditor } from "./narrative-editor";
 import { AuditTimeline } from "./audit-timeline";
-import { sendReport, markReportSent, discardReport } from "@/server/actions/reports";
+import {
+  sendReport,
+  markReportSent,
+  discardReport,
+} from "@/server/actions/reports";
 import { formatRange } from "@/lib/shared/window";
+import { reportTotalsDisplay } from "@/lib/shared/report-totals";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +36,7 @@ export default async function ReportDetailPage({
 
   const isInflight = IN_FLIGHT.has(row.status);
   const isActionable = ACTIONABLE.has(row.status);
+  const totals = reportTotalsDisplay(row);
 
   const dateRange =
     row.windowStart && row.windowEnd
@@ -67,16 +73,22 @@ export default async function ReportDetailPage({
 
       <div className="mt-6 flex gap-6 text-sm">
         <div className="text-center">
-          <p className="text-2xl font-semibold tabular-nums">{row.totalsPrs}</p>
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">PRs</p>
+          <p className="text-2xl font-semibold tabular-nums">{totals.prs.value}</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+            {totals.prs.label}
+          </p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-semibold tabular-nums">{row.totalsIssues}</p>
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Issues</p>
+          <p className="text-2xl font-semibold tabular-nums">{totals.issues.value}</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+            {totals.issues.label}
+          </p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-semibold tabular-nums">{row.totalsCommits}</p>
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Commits</p>
+          <p className="text-2xl font-semibold tabular-nums">{totals.commits.value}</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+            {totals.commits.label}
+          </p>
         </div>
         <div className="ml-auto text-right text-xs text-zinc-400">
           <Link href={`/runs/${row.runId}`} className="hover:text-zinc-700">
