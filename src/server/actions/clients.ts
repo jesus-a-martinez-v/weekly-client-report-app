@@ -13,7 +13,7 @@ import {
   updateClient as updateClientInService,
   type ClientServiceResult,
 } from "@/lib/services/clients";
-import { clientServiceDeps } from "./client-service-deps";
+import { clientServiceDeps } from "@/lib/services/client-service-deps";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();
@@ -28,6 +28,7 @@ function unwrap<T>(result: ClientServiceResult<T>): T {
 }
 
 export async function loadClients(): Promise<ClientWithProjects[]> {
+  await actorEmail();
   return unwrap(await listClientsInService(clientServiceDeps));
 }
 

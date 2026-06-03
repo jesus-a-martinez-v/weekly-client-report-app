@@ -4,15 +4,26 @@ import type {
   DraftResponse,
   SendPayload,
 } from "@/lib/clients/n8n";
-import type { ReviseNarrativeInput } from "@/lib/clients/openrouter";
+import type {
+  EmailDraft,
+  EmailDraftInput,
+  ReviseNarrativeInput,
+} from "@/lib/clients/openrouter";
+import type {
+  UploadedBlob,
+  UploadPdfInput,
+} from "@/lib/clients/blob";
 import type { db } from "@/lib/db/client";
 import type {
   AuditEntryInput,
   ClientWithProjects,
   UpdateReportEmailInput,
+  UpdateReportPdfInput,
 } from "@/lib/db/repos";
 import type { Report } from "@/lib/db/schema";
 import type { EmailEditInput } from "@/lib/shared/validation/report";
+import { renderReportHtml } from "@/lib/shared/pdf-template";
+import { bogotaDateISO, formatRange, reportFilename } from "@/lib/shared/window";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ReportExecutor = typeof db | Transaction;
@@ -86,6 +97,41 @@ export type ReportServiceDeps = {
   };
 };
 
+export type ReportRegenerationDeps = {
+  reportsRepo: Pick<ReportsRepository, "findReportById" | "updateReportEmail"> & {
+    updateReportPdf(
+      id: string,
+      input: UpdateReportPdfInput,
+      executor?: ReportExecutor,
+    ): Promise<void>;
+  };
+  clientsRepo: {
+    findClientById(
+      id: string,
+      executor?: ReportExecutor,
+    ): Promise<ClientWithProjects | null>;
+  };
+  recordAuditEntry(
+    entry: AuditEntryInput & { tx?: ReportExecutor },
+  ): Promise<void>;
+  n8n: {
+    createDraft(input: DraftPayload): Promise<DraftResponse>;
+    discardDraft(input: DiscardPayload): Promise<unknown>;
+  };
+  openRouter: {
+    generateEmailDraft(input: EmailDraftInput): Promise<EmailDraft>;
+  };
+  pdf: {
+    renderPdfBuffer(html: string): Promise<Buffer>;
+  };
+  blob: {
+    uploadReportPdf(input: UploadPdfInput): Promise<UploadedBlob>;
+  };
+  sentry?: {
+    captureException: CaptureException;
+  };
+};
+
 const ACTIONABLE_STATUSES = new Set(["drafted", "quiet"]);
 
 function assertActionable(row: Report, verb: string): void {
@@ -102,7 +148,7 @@ function assertEditable(row: Report): void {
 
 async function requireReport(
   reportId: string,
-  deps: ReportServiceDeps,
+  deps: { reportsRepo: Pick<ReportsRepository, "findReportById"> },
 ): Promise<Report> {
   const row = await deps.reportsRepo.findReportById(reportId);
   if (!row) throw new Error("Report not found");
@@ -110,7 +156,7 @@ async function requireReport(
 }
 
 function captureBestEffort(
-  deps: ReportServiceDeps,
+  deps: { sentry?: { captureException: CaptureException } },
   error: unknown,
   operation: string,
   extra: Record<string, unknown>,
@@ -348,6 +394,90 @@ export async function reviseNarrative(
   await deps.regenerateReport.trigger({ reportId });
 
   return { reportId, runId: row.runId };
+}
+
+export async function regeneratePdf(
+  reportId: string,
+  actorEmail: string,
+  deps: ReportRegenerationDeps,
+): Promise<void> {
+  const row = await requireReport(reportId, deps);
+
+  if (!row.narrativeMd) throw new Error("Report has no narrative");
+  if (!row.clientId) throw new Error("Report has no associated client");
+
+  const clientRow = await deps.clientsRepo.findClientById(row.clientId);
+  if (!clientRow) throw new Error("Client not found");
+  const { client } = clientRow;
+
+  const dateRange = formatRange(row.windowStart, row.windowEnd);
+  const startDateISO = bogotaDateISO(row.windowStart);
+  const filename = reportFilename(row.clientName, startDateISO);
+  const html = renderReportHtml({
+    clientName: row.clientName,
+    weekLabel: row.weekLabel,
+    dateRange,
+    narrativeMd: row.narrativeMd,
+  });
+  const pdf = await deps.pdf.renderPdfBuffer(html);
+  const uploaded = await deps.blob.uploadReportPdf({
+    weekLabel: row.weekLabel,
+    slug: client.slug,
+    startDateISO,
+    filename,
+    body: pdf,
+  });
+  const email = await deps.openRouter.generateEmailDraft({
+    clientName: row.clientName,
+    contactName: client.contactName,
+    dateRange,
+    narrativeMd: row.narrativeMd,
+  });
+
+  const oldDraftId = row.gmailDraftId;
+  if (oldDraftId) {
+    try {
+      await deps.n8n.discardDraft({ action: "discard", draft_id: oldDraftId });
+    } catch (err) {
+      captureBestEffort(deps, err, "discard-draft-before-regenerate-report", {
+        reportId,
+        oldDraftId,
+      });
+      // Best-effort: don't block regeneration if the old draft can't be reached.
+    }
+  }
+
+  const draftRes = await deps.n8n.createDraft({
+    action: "draft",
+    to: client.contactEmail,
+    subject: email.subject,
+    body: email.body,
+    pdf_url: uploaded.url,
+    filename,
+    client_slug: client.slug,
+    week_label: row.weekLabel,
+  });
+
+  await deps.reportsRepo.updateReportPdf(reportId, {
+    pdfBlobUrl: uploaded.url,
+    pdfFilename: filename,
+  });
+  await deps.reportsRepo.updateReportEmail(reportId, {
+    subject: email.subject,
+    body: email.body,
+    gmailDraftId: draftRes.draft_id,
+  });
+  await deps.recordAuditEntry({
+    actorEmail,
+    action: "report.regenerated",
+    entityType: "report",
+    entityId: reportId,
+    payload: {
+      pdfPathname: uploaded.pathname,
+      oldDraftId,
+      newDraftId: draftRes.draft_id,
+    },
+  });
 }
 
 export async function deleteReport(

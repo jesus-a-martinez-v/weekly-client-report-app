@@ -9,7 +9,7 @@ import {
   deleteRun as deleteRunInService,
   triggerOnDemandRun,
 } from "@/lib/services/runs";
-import { runServiceDeps } from "./run-service-deps";
+import { runServiceDeps } from "@/lib/services/run-service-deps";
 
 async function actorEmail(): Promise<string> {
   const session = await auth();

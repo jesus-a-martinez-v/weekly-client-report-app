@@ -1,6 +1,10 @@
 import type { DiscardPayload } from "@/lib/clients/n8n";
 import type { db } from "@/lib/db/client";
-import type { AuditEntryInput, CreateRunInput } from "@/lib/db/repos";
+import type {
+  AuditEntryInput,
+  ClientWithProjects,
+  CreateRunInput,
+} from "@/lib/db/repos";
 import type { Report, Run } from "@/lib/db/schema";
 import type { OnDemandInput } from "@/lib/shared/validation/report";
 import { isoWeekToWindow, reportingWindow } from "@/lib/shared/window";
@@ -21,6 +25,26 @@ export type RunSummary = {
   drafted: number;
   quiet: number;
   errors: number;
+};
+
+type RunLogger = {
+  info?(message: string, properties?: Record<string, unknown>): void;
+  warn?(message: string, properties?: Record<string, unknown>): void;
+};
+
+export type WeeklyReportPayload = {
+  clientId: string;
+  weekLabel: string;
+  runId: string;
+};
+
+type WeeklyReportBatchRun =
+  | { ok: true; output: { status: "drafted" | "quiet" | "failed" } }
+  | { ok: false };
+
+export type WeeklyRunResult = {
+  runId: string;
+  summary: RunSummary;
 };
 
 type RunAuditInput = {
@@ -50,6 +74,23 @@ export type RunLifecycleDeps = {
   recordAuditEntry(
     entry: AuditEntryInput & { tx?: RunExecutor },
   ): Promise<void>;
+};
+
+export type WeeklyRunDeps = RunLifecycleDeps & {
+  clientsRepo: {
+    listClients(options: { status?: string }): Promise<ClientWithProjects[]>;
+  };
+  generateClientReport: {
+    batchTriggerAndWait(
+      items: Array<{ payload: WeeklyReportPayload }>,
+    ): Promise<{ runs: WeeklyReportBatchRun[] }>;
+  };
+  telegram: {
+    sendDigestMessage(input: {
+      weekLabel: string;
+      summary: RunSummary;
+    }): Promise<void>;
+  };
 };
 
 export type OnDemandRunDeps = RunLifecycleDeps & {
@@ -203,6 +244,70 @@ export async function markRunCompletedFromSummary(
   }
 
   return status;
+}
+
+export async function runWeeklyReports(
+  input: {
+    timestamp?: string | Date | null;
+    triggerRunId?: string | null;
+    logger?: RunLogger;
+  },
+  deps: WeeklyRunDeps,
+): Promise<WeeklyRunResult> {
+  const actorEmail = "system";
+  const anchor = input.timestamp ? new Date(input.timestamp) : new Date();
+  const window = reportingWindow(anchor);
+  input.logger?.info?.("Weekly run starting", { weekLabel: window.weekLabel });
+
+  const runId = await startRun(
+    {
+      kind: "weekly",
+      weekLabel: window.weekLabel,
+      windowStart: window.start,
+      windowEnd: window.end,
+      triggerRunId: input.triggerRunId ?? null,
+    },
+    deps,
+  );
+  const active = await deps.clientsRepo.listClients({ status: "active" });
+
+  if (active.length === 0) {
+    const summary = { drafted: 0, quiet: 0, errors: 0 };
+    input.logger?.warn?.("No active clients — nothing to fan out");
+    await markRunSucceeded(runId, deps);
+    await deps.telegram.sendDigestMessage({ weekLabel: window.weekLabel, summary });
+    return { runId, summary };
+  }
+
+  const batch = await deps.generateClientReport.batchTriggerAndWait(
+    active.map(({ client }) => ({
+      payload: { clientId: client.id, weekLabel: window.weekLabel, runId },
+    })),
+  );
+
+  const summary = { drafted: 0, quiet: 0, errors: 0 };
+  for (const run of batch.runs) {
+    if (!run.ok || run.output.status === "failed") summary.errors += 1;
+    else if (run.output.status === "quiet") summary.quiet += 1;
+    else summary.drafted += 1;
+  }
+
+  const finalStatus = await markRunCompletedFromSummary(
+    runId,
+    { actorEmail, weekLabel: window.weekLabel, summary },
+    deps,
+  );
+
+  await deps.telegram.sendDigestMessage({ weekLabel: window.weekLabel, summary });
+
+  input.logger?.info?.("Weekly run finished", {
+    runId,
+    weekLabel: window.weekLabel,
+    ...summary,
+    finalStatus,
+  });
+
+  return { runId, summary };
 }
 
 export async function triggerOnDemandRun(
