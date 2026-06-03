@@ -8,6 +8,8 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://localhost:5432/placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
