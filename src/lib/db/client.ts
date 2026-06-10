@@ -16,9 +16,10 @@ const client =
   globalForDb.__pgClient ??
   postgres(url, {
     ssl: "require",
-    max: 4,
-    idle_timeout: 30,
+    max: 1,
+    idle_timeout: 20,
     connect_timeout: 10,
+    prepare: false,
   });
 
 if (process.env.NODE_ENV !== "production") {
