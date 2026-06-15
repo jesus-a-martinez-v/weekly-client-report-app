@@ -39,8 +39,24 @@ async function loadNarrativePrompt(): Promise<string> {
   return _promptCache;
 }
 
-function model(): string {
-  return process.env.OPENROUTER_MODEL || "openai/gpt-5.5";
+// Per-call-site model selection. Generation (narrative) gets the stronger,
+// pricier model; the short client email and the synchronous revise use the
+// cheaper/faster one. Each is env-overridable; defaults are authoritative so
+// behavior is correct even before env vars propagate to Vercel/Trigger.dev.
+const DEFAULT_NARRATIVE_MODEL = "deepseek/deepseek-v4-pro";
+const DEFAULT_EMAIL_MODEL = "deepseek/deepseek-v4-flash";
+const DEFAULT_REVISION_MODEL = "deepseek/deepseek-v4-flash";
+
+function narrativeModel(): string {
+  return process.env.OPENROUTER_MODEL_NARRATIVE || DEFAULT_NARRATIVE_MODEL;
+}
+
+function emailModel(): string {
+  return process.env.OPENROUTER_MODEL_EMAIL || DEFAULT_EMAIL_MODEL;
+}
+
+function revisionModel(): string {
+  return process.env.OPENROUTER_MODEL_REVISION || DEFAULT_REVISION_MODEL;
 }
 
 function apiKey(): string {
@@ -111,7 +127,7 @@ export async function generateNarrative(input: NarrativeInput): Promise<string> 
     .replace("{{CLIENT_NAME}}", input.clientName);
 
   return chat({
-    model: model(),
+    model: narrativeModel(),
     messages: [{ role: "user", content: prompt }],
     reasoning: { effort: "medium" },
     response_format: { type: "text" },
@@ -152,7 +168,7 @@ export async function generateEmailDraft(input: EmailDraftInput): Promise<EmailD
     `NARRATIVE:\n${input.narrativeMd}`;
 
   const raw = await chat({
-    model: model(),
+    model: emailModel(),
     messages: [
       { role: "system", content: EMAIL_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
@@ -200,7 +216,7 @@ export async function reviseNarrative(input: ReviseNarrativeInput): Promise<stri
     `INSTRUCTIONS:\n${input.instructions}`;
 
   const result = await chat({
-    model: model(),
+    model: revisionModel(),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
