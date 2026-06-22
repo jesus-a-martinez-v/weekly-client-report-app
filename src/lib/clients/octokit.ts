@@ -5,6 +5,7 @@ import type {
   Author,
   ClientActivity,
   ClosedIssue,
+  CommentSummary,
   CommitSummary,
   GithubProjectActivity,
   MergedPR,
@@ -131,17 +132,70 @@ async function fetchCommits(
   }));
 }
 
+async function fetchIssueComments(
+  repo: string,
+  start: Date,
+  end: Date,
+): Promise<CommentSummary[]> {
+  const [owner, name] = repo.split("/");
+  if (!owner || !name) throw new Error(`Invalid repo: ${repo}`);
+  const endIso = toIsoZ(end);
+  const items: CommentSummary[] = [];
+
+  const issuePages = octokit().paginate.iterator(
+    octokit().rest.issues.listCommentsForRepo,
+    { owner, repo: name, since: toIsoZ(start), per_page: 100 },
+  );
+  for await (const page of issuePages) {
+    for (const c of page.data) {
+      if (c.created_at > endIso) continue;
+      const author = searchAuthor(c);
+      if (author.is_bot) continue;
+      items.push({
+        author,
+        body: c.body ?? "",
+        createdAt: c.created_at,
+        url: c.html_url,
+        target: `#${c.issue_url.split("/").pop() ?? "?"} comment`,
+      });
+    }
+  }
+
+  const reviewPages = octokit().paginate.iterator(
+    octokit().rest.pulls.listReviewCommentsForRepo,
+    { owner, repo: name, since: toIsoZ(start), per_page: 100 },
+  );
+  for await (const page of reviewPages) {
+    for (const c of page.data) {
+      if (c.created_at > endIso) continue;
+      const author = searchAuthor(c);
+      if (author.is_bot) continue;
+      items.push({
+        author,
+        body: c.body,
+        createdAt: c.created_at,
+        url: c.html_url,
+        target: `#${c.pull_request_url.split("/").pop() ?? "?"} review`,
+      });
+    }
+  }
+
+  return items;
+}
+
 async function fetchRepo(
   repo: string,
   start: Date,
   end: Date,
+  includeComments = false,
 ): Promise<RepoActivity> {
-  const [merged_prs, closed_issues, commits] = await Promise.all([
+  const [merged_prs, closed_issues, commits, comments] = await Promise.all([
     fetchMergedPRs(repo, start, end),
     fetchClosedIssues(repo, start, end),
     fetchCommits(repo, start, end),
+    includeComments ? fetchIssueComments(repo, start, end) : Promise.resolve(undefined),
   ]);
-  return { repo, merged_prs, closed_issues, commits };
+  return { repo, merged_prs, closed_issues, commits, ...(comments !== undefined && { comments }) };
 }
 
 export type FetchClientActivityInput = {
@@ -154,6 +208,7 @@ export type FetchClientActivityInput = {
   };
   projects: Array<{ name: string | null; repos: string[] }>;
   window: { start: Date; end: Date; label: string };
+  includeComments?: boolean;
 };
 
 export async function fetchClientActivity(
@@ -162,7 +217,7 @@ export async function fetchClientActivity(
   const projects: GithubProjectActivity[] = [];
   for (const p of input.projects) {
     const repos = await Promise.all(
-      p.repos.map((r) => fetchRepo(r, input.window.start, input.window.end)),
+      p.repos.map((r) => fetchRepo(r, input.window.start, input.window.end, input.includeComments)),
     );
     const totals: ActivityTotals = {
       prs: repos.reduce((n, r) => n + r.merged_prs.length, 0),

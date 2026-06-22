@@ -8,6 +8,7 @@ import type { LinearError, LinearErrorRaw } from "@linear/sdk";
 import type {
   ActivityTotals,
   ClientActivity,
+  LinearCommentSummary,
   LinearIssueSummary,
   LinearProjectActivity,
 } from "@/lib/activity/types";
@@ -36,6 +37,7 @@ export type FetchLinearActivityInput = {
   projects: FetchLinearActivityProject[];
   window: { start: Date; end: Date; label: string };
   token: string;
+  includeComments?: boolean;
 };
 
 type StringComparator = {
@@ -285,6 +287,117 @@ async function fetchIssues(
   return issues;
 }
 
+type LinearCommentFilter = {
+  team: { key: StringComparator };
+  project?: { id: IdComparator };
+  createdAt: DateComparator;
+};
+
+type LinearCommentsQueryVariables = {
+  first: number;
+  after?: string | null;
+  filter: LinearCommentFilter;
+};
+
+type LinearCommentNode = {
+  id: string;
+  body: string;
+  createdAt: string;
+  url: string;
+  user?: { name?: string | null } | null;
+  issue?: { identifier?: string | null } | null;
+};
+
+type LinearCommentsQueryResponse = {
+  comments?: {
+    pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+    nodes: LinearCommentNode[];
+  };
+};
+
+const COMMENTS_QUERY = `
+  query ClientDailySummaryLinearComments($first: Int!, $after: String, $filter: CommentFilter) {
+    comments(first: $first, after: $after, filter: $filter) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        body
+        createdAt
+        url
+        user {
+          name
+        }
+        issue {
+          identifier
+        }
+      }
+    }
+  }
+`;
+
+async function fetchCommentPage(
+  client: LinearClient,
+  variables: LinearCommentsQueryVariables,
+  retried = false,
+): Promise<NonNullable<LinearCommentsQueryResponse["comments"]>> {
+  try {
+    const response = await client.client.request<
+      LinearCommentsQueryResponse,
+      LinearCommentsQueryVariables
+    >(COMMENTS_QUERY, variables);
+    if (!response.comments) {
+      throw new LinearFetchError("Linear API response did not include comments");
+    }
+    return response.comments;
+  } catch (error) {
+    if (error instanceof LinearFetchError) throw error;
+    if (!retried && isLinearRateLimit(error)) {
+      await sleep(retryAfterMs(error));
+      return fetchCommentPage(client, variables, true);
+    }
+    throw toLinearFetchError(error);
+  }
+}
+
+async function fetchLinearComments(
+  client: LinearClient,
+  project: FetchLinearActivityProject,
+  window: { start: Date; end: Date },
+): Promise<LinearCommentSummary[]> {
+  const filter: LinearCommentFilter = {
+    team: { key: { eq: project.teamKey } },
+    createdAt: {
+      gte: window.start.toISOString(),
+      lte: window.end.toISOString(),
+    },
+  };
+  if (project.projectId) {
+    filter.project = { id: { eq: project.projectId } };
+  }
+
+  const comments: LinearCommentSummary[] = [];
+  let after: string | null = null;
+
+  do {
+    const page = await fetchCommentPage(client, { first: PAGE_SIZE, after, filter });
+    for (const node of page.nodes) {
+      comments.push({
+        author: node.user?.name ?? "Unknown",
+        body: node.body,
+        createdAt: node.createdAt,
+        url: node.url,
+        issueIdentifier: node.issue?.identifier ?? "",
+      });
+    }
+    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor ?? null : null;
+  } while (after);
+
+  return comments;
+}
+
 function projectTotals(input: {
   completed: LinearIssueSummary[];
   inProgress: LinearIssueSummary[];
@@ -311,7 +424,7 @@ export async function fetchLinearActivity(
   const projects: LinearProjectActivity[] = [];
 
   for (const project of input.projects) {
-    const [completed, inProgress, created] = await Promise.all([
+    const [completed, inProgress, created, comments] = await Promise.all([
       fetchIssues(
         linear,
         issueFilter({
@@ -334,6 +447,9 @@ export async function fetchLinearActivity(
           createdWindow: input.window,
         }),
       ),
+      input.includeComments
+        ? fetchLinearComments(linear, project, input.window)
+        : Promise.resolve(undefined),
     ]);
 
     projects.push({
@@ -343,6 +459,7 @@ export async function fetchLinearActivity(
       completed,
       inProgress,
       created,
+      ...(comments !== undefined && { comments }),
       totals: projectTotals({ completed, inProgress, created }),
     });
   }

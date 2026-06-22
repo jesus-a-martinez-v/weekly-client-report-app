@@ -42,11 +42,28 @@ export type CommitSummary = {
   date: string;
 };
 
+export type CommentSummary = {
+  author: Author;
+  body: string;
+  createdAt: string;
+  url: string;
+  target: string;
+};
+
+export type LinearCommentSummary = {
+  author: string;
+  body: string;
+  createdAt: string;
+  url: string;
+  issueIdentifier: string;
+};
+
 export type RepoActivity = {
   repo: string;
   merged_prs: MergedPR[];
   closed_issues: ClosedIssue[];
   commits: CommitSummary[];
+  comments?: CommentSummary[];
 };
 
 export type GithubProjectActivity = {
@@ -73,6 +90,7 @@ export type LinearProjectActivity = {
   completed: LinearIssueSummary[];
   inProgress: LinearIssueSummary[];
   created: LinearIssueSummary[];
+  comments?: LinearCommentSummary[];
   totals: ActivityTotals;
 };
 
