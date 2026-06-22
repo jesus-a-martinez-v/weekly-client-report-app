@@ -46,6 +46,7 @@ async function loadNarrativePrompt(): Promise<string> {
 const DEFAULT_NARRATIVE_MODEL = "deepseek/deepseek-v4-pro";
 const DEFAULT_EMAIL_MODEL = "deepseek/deepseek-v4-flash";
 const DEFAULT_REVISION_MODEL = "deepseek/deepseek-v4-flash";
+const DEFAULT_DAILY_SUMMARY_MODEL = "deepseek/deepseek-v4-flash";
 
 function narrativeModel(): string {
   return process.env.OPENROUTER_MODEL_NARRATIVE || DEFAULT_NARRATIVE_MODEL;
@@ -57,6 +58,10 @@ function emailModel(): string {
 
 function revisionModel(): string {
   return process.env.OPENROUTER_MODEL_REVISION || DEFAULT_REVISION_MODEL;
+}
+
+function dailySummaryModel(): string {
+  return process.env.OPENROUTER_MODEL_DAILY || DEFAULT_DAILY_SUMMARY_MODEL;
 }
 
 function apiKey(): string {
@@ -225,6 +230,72 @@ export async function reviseNarrative(input: ReviseNarrativeInput): Promise<stri
   });
 
   return result.trim();
+}
+
+export type DailySummaryInput = {
+  clientName: string;
+  dateLabel: string;
+  activity: ClientActivity;
+};
+
+export type DailySummary = { summary: string; hoursEstimate: number };
+
+const DAILY_SUMMARY_SYSTEM_PROMPT = `You write a concise daily work summary for an internal tool.
+
+Given a day's activity for a client (commits, merged PRs, closed issues, comments, and/or Linear issues), write:
+1. A "summary" field: 2–3 short plain-text paragraphs (no Markdown, no bullet points) describing what was done that day. Focus on outcomes, not mechanics.
+2. A "hoursEstimate" field: a single number (decimal OK) estimating how many hours were worked for that client that day.
+
+Calibration anchors for the time estimate (use these as rough guides, reason holistically):
+- A small standalone commit ≈ 0.25–0.5 h
+- A substantial merged PR with a meaningful diff ≈ 1–3 h
+- A closed issue or completed Linear ticket ≈ 0.5–2 h depending on apparent complexity
+- Review comments / discussion participation ≈ 0.25 h per thread
+- An in-progress issue with no completions is background context; weight lightly
+- Cap around 8 h for a normal working day; do not exceed 10 h unless the evidence is overwhelming
+
+Rules:
+- Output JSON only: { "summary": "...", "hoursEstimate": 0.0 }
+- Plain text in summary — no Markdown, no bullet points, no headers
+- Write in third person ("Work focused on…", "The day included…")
+- Do not mention the client's name or specific people
+- If there is truly no meaningful activity, set summary to "No significant activity recorded for this day." and hoursEstimate to 0`;
+
+export async function generateDailySummary(input: DailySummaryInput): Promise<DailySummary> {
+  const userPrompt =
+    `CLIENT: ${input.clientName}\n` +
+    `DATE: ${input.dateLabel}\n\n` +
+    `ACTIVITY:\n${JSON.stringify(input.activity, null, 2)}`;
+
+  const raw = await chat({
+    model: dailySummaryModel(),
+    messages: [
+      { role: "system", content: DAILY_SUMMARY_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    reasoning: { effort: "low" },
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+  });
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    try {
+      parsed = JSON.parse(stripped);
+    } catch (fallbackErr) {
+      throw new Error("OpenRouter daily-summary response was not valid JSON", {
+        cause: fallbackErr instanceof Error ? fallbackErr : parseErr,
+      });
+    }
+  }
+  const obj = parsed as { summary?: unknown; hoursEstimate?: unknown };
+  if (typeof obj.summary !== "string" || typeof obj.hoursEstimate !== "number") {
+    throw new Error(`OpenRouter daily-summary response missing summary/hoursEstimate: ${raw.slice(0, 200)}`);
+  }
+  return { summary: obj.summary, hoursEstimate: obj.hoursEstimate };
 }
 
 export function quietWeekNarrative(input: {

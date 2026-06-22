@@ -94,6 +94,28 @@ export function reportFilename(clientName: string, startDateISO: string): string
   return `${safe}_${startDateISO}_report.pdf`;
 }
 
+export type DayWindow = {
+  start: Date;
+  end: Date;
+  label: string;
+};
+
+export function dayWindow(dateISO: string): DayWindow {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
+  if (!m) throw new Error(`Invalid date: ${dateISO} (expected YYYY-MM-DD)`);
+  const utcMidnight = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const start = bogotaWallClockToUtc(utcMidnight, 0, 0, 0, 0);
+  const end = bogotaWallClockToUtc(utcMidnight, 23, 59, 59, 999);
+  const label = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(start);
+  return { start, end, label };
+}
+
 export function bogotaDateISO(d: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ,

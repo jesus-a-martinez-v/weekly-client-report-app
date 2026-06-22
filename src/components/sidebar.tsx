@@ -14,7 +14,10 @@ const sections = [
   {
     label: "On-demand",
     href: "/on-demand",
-    items: [{ label: "Trigger now", href: "/on-demand", disabled: false }],
+    items: [
+      { label: "Trigger now", href: "/on-demand", disabled: false },
+      { label: "Daily summary", href: "/daily-summary", disabled: false },
+    ],
   },
   {
     label: "Admin",
