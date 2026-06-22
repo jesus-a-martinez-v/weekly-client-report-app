@@ -240,26 +240,23 @@ export type DailySummaryInput = {
 
 export type DailySummary = { summary: string; hoursEstimate: number };
 
-const DAILY_SUMMARY_SYSTEM_PROMPT = `You write a concise daily work summary for an internal tool.
+const DAILY_SUMMARY_SYSTEM_PROMPT = `You write a very short daily work summary for an internal time-tracking tool.
 
-Given a day's activity for a client (commits, merged PRs, closed issues, comments, and/or Linear issues), write:
-1. A "summary" field: 2–3 short plain-text paragraphs (no Markdown, no bullet points) describing what was done that day. Focus on outcomes, not mechanics.
-2. A "hoursEstimate" field: a single number (decimal OK) estimating how many hours were worked for that client that day.
+Given a day's activity for a client, write:
+1. A "summary" field: plain text, extremely concise.
+   - Single project: 2–3 sentences total. No more.
+   - Multiple projects: one line per project, prefixed with the project name in square brackets, e.g. "[Project A] Did X and Y. [Project B] Did Z."
+   Focus on outcomes, not mechanics. No Markdown, no bullet points, no headers.
+2. A "hoursEstimate" field: a single number (decimal OK) estimating hours worked.
 
-Calibration anchors for the time estimate (use these as rough guides, reason holistically):
-- A small standalone commit ≈ 0.25–0.5 h
-- A substantial merged PR with a meaningful diff ≈ 1–3 h
-- A closed issue or completed Linear ticket ≈ 0.5–2 h depending on apparent complexity
-- Review comments / discussion participation ≈ 0.25 h per thread
-- An in-progress issue with no completions is background context; weight lightly
-- Cap around 8 h for a normal working day; do not exceed 10 h unless the evidence is overwhelming
+Calibration anchors:
+- Small commit ≈ 0.25 h · substantial merged PR ≈ 1–3 h · closed ticket ≈ 0.5–2 h · review/comment thread ≈ 0.25 h
+- Cap at 8 h; do not exceed 10 h unless the evidence is overwhelming
 
 Rules:
 - Output JSON only: { "summary": "...", "hoursEstimate": 0.0 }
-- Plain text in summary — no Markdown, no bullet points, no headers
-- Write in third person ("Work focused on…", "The day included…")
 - Do not mention the client's name or specific people
-- If there is truly no meaningful activity, set summary to "No significant activity recorded for this day." and hoursEstimate to 0`;
+- If truly no meaningful activity: summary = "No significant activity recorded for this day.", hoursEstimate = 0`;
 
 export async function generateDailySummary(input: DailySummaryInput): Promise<DailySummary> {
   const userPrompt =
